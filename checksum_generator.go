@@ -9,6 +9,7 @@ import (
 )
 
 type ChecksumRecord struct {
+	path     string
 	checksum string
 	modTime  time.Time
 }
@@ -28,5 +29,5 @@ func FileChecksum(file string) ChecksumRecord {
 	check(err)
 
 	sum := sha1.Sum(data)
-	return ChecksumRecord{hex.EncodeToString(sum[:]), fi.ModTime()}
+	return ChecksumRecord{file, hex.EncodeToString(sum[:]), fi.ModTime()}
 }

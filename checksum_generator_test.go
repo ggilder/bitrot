@@ -27,6 +27,9 @@ func TestFileChecksum(t *testing.T) {
 
 	correctModTime := fi.ModTime()
 	correctSum := "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
+	if fileChecksum.path != testFile {
+		t.Fatalf("expected path %s; got %s", testFile, fileChecksum.path)
+	}
 	if fileChecksum.checksum != correctSum {
 		t.Fatalf("expected checksum %s; got %s", correctSum, fileChecksum.checksum)
 	}
