@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -30,4 +31,24 @@ func FileChecksum(file string) ChecksumRecord {
 
 	sum := sha1.Sum(data)
 	return ChecksumRecord{file, hex.EncodeToString(sum[:]), fi.ModTime()}
+}
+
+// TODO probably records should be a map of path -> ChecksumRecord to facilitate comparison
+func DirectoryChecksums(path string) []ChecksumRecord {
+	records := []ChecksumRecord{}
+	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		fi, err := os.Stat(path)
+		check(err)
+
+		if fi.Mode().IsRegular() {
+			records = append(records, FileChecksum(path))
+		}
+
+		return nil
+	})
+	return records
 }
