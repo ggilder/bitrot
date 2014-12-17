@@ -14,18 +14,23 @@ func writeTestFile(dir, name, content string) string {
 	return testFile
 }
 
-func TestStuff(t *testing.T) {
-	// FileChecksum()
-	var tempDir, err = ioutil.TempDir("", "checksum")
+func TestFileChecksum(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
 	check(err)
 
 	defer os.RemoveAll(tempDir)
 
 	testFile := writeTestFile(tempDir, "foo", "hello! world\n")
-	sum := FileChecksum(testFile)
+	fileChecksum := FileChecksum(testFile)
+	var fi os.FileInfo
+	fi, err = os.Stat(testFile)
 
+	correctModTime := fi.ModTime()
 	correctSum := "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
-	if sum != correctSum {
-		t.Fatalf("expected checksum %s; got %s", correctSum, sum)
+	if fileChecksum.checksum != correctSum {
+		t.Fatalf("expected checksum %s; got %s", correctSum, fileChecksum.checksum)
+	}
+	if fileChecksum.modTime != correctModTime {
+		t.Fatalf("expected modTime %s; got %s", correctModTime, fileChecksum.modTime)
 	}
 }
