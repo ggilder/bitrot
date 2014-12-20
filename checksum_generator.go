@@ -10,15 +10,15 @@ import (
 )
 
 type ChecksumRecord struct {
-	Path     string
-	Checksum string
-	ModTime  time.Time
+	Path     string    `json:"path"`
+	Checksum string    `json:"checksum"`
+	ModTime  time.Time `json:"mod_time"`
 }
 
 type DirectoryManifest struct {
-	Path      string
-	CreatedAt time.Time
-	Entries   map[string]ChecksumRecord
+	Path      string                    `json:"path"`
+	CreatedAt time.Time                 `json:"created_at"`
+	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
 func FileChecksum(file string) ChecksumRecord {
