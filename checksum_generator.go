@@ -21,12 +21,6 @@ type DirectoryManifest struct {
 	entries   map[string]ChecksumRecord
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func FileChecksum(file string) ChecksumRecord {
 	var fi os.FileInfo
 	data, err := ioutil.ReadFile(file)
@@ -47,6 +41,8 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 	}
 }
 
+// Private functions
+
 func directoryChecksums(path string) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
 	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
@@ -64,4 +60,10 @@ func directoryChecksums(path string) map[string]ChecksumRecord {
 		return nil
 	})
 	return records
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
 }
