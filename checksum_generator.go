@@ -15,6 +15,12 @@ type ChecksumRecord struct {
 	modTime  time.Time
 }
 
+type DirectoryManifest struct {
+	path      string
+	createdAt time.Time
+	entries   map[string]ChecksumRecord
+}
+
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -33,7 +39,15 @@ func FileChecksum(file string) ChecksumRecord {
 	return ChecksumRecord{file, hex.EncodeToString(sum[:]), fi.ModTime()}
 }
 
-func DirectoryChecksums(path string) map[string]ChecksumRecord {
+func GenerateDirectoryManifest(path string) DirectoryManifest {
+	return DirectoryManifest{
+		path,
+		time.Now(),
+		directoryChecksums(path),
+	}
+}
+
+func directoryChecksums(path string) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
 	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

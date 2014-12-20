@@ -2,9 +2,11 @@ package checksum_generator
 
 import (
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var helloWorldString = "hello! world\n"
@@ -40,7 +42,7 @@ func TestFileChecksum(t *testing.T) {
 	}
 }
 
-func TestDirectoryChecksum(t *testing.T) {
+func TestDirectoryManifest(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	check(err)
 
@@ -56,18 +58,28 @@ func TestDirectoryChecksum(t *testing.T) {
 		testFile:  helloWorldChecksum,
 	}
 
-	checksums := DirectoryChecksums(tempDir)
+	expectedCreationTime := time.Now()
 
-	if len(checksums) != len(expectedChecksums) {
+	manifest := GenerateDirectoryManifest(tempDir)
+
+	if manifest.path != tempDir {
+		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.path)
+	}
+
+	if math.Abs(float64(manifest.createdAt.Unix()-expectedCreationTime.Unix())) > 5 {
+		t.Fatalf("expected manifest createdAt within 5s of %v, got %v", expectedCreationTime, manifest.createdAt)
+	}
+
+	if len(manifest.entries) != len(expectedChecksums) {
 		t.Fatalf(
 			"unexpected number of checksums! expected %d, got %d (%v)",
 			len(expectedChecksums),
-			len(checksums),
-			checksums,
+			len(manifest.entries),
+			manifest.entries,
 		)
 	}
 
-	for path, fileChecksum := range checksums {
+	for path, fileChecksum := range manifest.entries {
 		if fileChecksum.checksum != expectedChecksums[path] {
 			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.checksum)
 		}
