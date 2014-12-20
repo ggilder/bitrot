@@ -10,7 +10,6 @@ import (
 )
 
 type ChecksumRecord struct {
-	Path     string    `json:"path"`
 	Checksum string    `json:"checksum"`
 	ModTime  time.Time `json:"mod_time"`
 }
@@ -30,7 +29,7 @@ func FileChecksum(file string) ChecksumRecord {
 	check(err)
 
 	sum := sha1.Sum(data)
-	return ChecksumRecord{file, hex.EncodeToString(sum[:]), fi.ModTime()}
+	return ChecksumRecord{hex.EncodeToString(sum[:]), fi.ModTime()}
 }
 
 func GenerateDirectoryManifest(path string) DirectoryManifest {

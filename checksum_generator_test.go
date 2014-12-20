@@ -31,9 +31,6 @@ func TestFileChecksum(t *testing.T) {
 	fi, err = os.Stat(testFile)
 
 	correctModTime := fi.ModTime()
-	if fileChecksum.Path != testFile {
-		t.Fatalf("expected path %s; got %s", testFile, fileChecksum.Path)
-	}
 	if fileChecksum.Checksum != helloWorldChecksum {
 		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.Checksum)
 	}
