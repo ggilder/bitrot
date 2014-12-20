@@ -51,12 +51,9 @@ func TestDirectoryChecksum(t *testing.T) {
 	check(os.MkdirAll(subdir, 0755))
 	testFile2 := writeTestFile(subdir, "foo", helloWorldString)
 
-	expectedChecksums := []struct {
-		path     string
-		checksum string
-	}{
-		{testFile2, helloWorldChecksum},
-		{testFile, helloWorldChecksum},
+	expectedChecksums := map[string]string{
+		testFile2: helloWorldChecksum,
+		testFile:  helloWorldChecksum,
 	}
 
 	checksums := DirectoryChecksums(tempDir)
@@ -70,12 +67,9 @@ func TestDirectoryChecksum(t *testing.T) {
 		)
 	}
 
-	for i, fileChecksum := range checksums {
-		if fileChecksum.path != expectedChecksums[i].path {
-			t.Fatalf("path mismatch; expected %s, got %s", expectedChecksums[i].path, fileChecksum.path)
-		}
-		if fileChecksum.checksum != expectedChecksums[i].checksum {
-			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[i].checksum, fileChecksum.checksum)
+	for path, fileChecksum := range checksums {
+		if fileChecksum.checksum != expectedChecksums[path] {
+			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.checksum)
 		}
 	}
 }

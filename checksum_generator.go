@@ -33,9 +33,8 @@ func FileChecksum(file string) ChecksumRecord {
 	return ChecksumRecord{file, hex.EncodeToString(sum[:]), fi.ModTime()}
 }
 
-// TODO probably records should be a map of path -> ChecksumRecord to facilitate comparison
-func DirectoryChecksums(path string) []ChecksumRecord {
-	records := []ChecksumRecord{}
+func DirectoryChecksums(path string) map[string]ChecksumRecord {
+	records := map[string]ChecksumRecord{}
 	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -45,7 +44,7 @@ func DirectoryChecksums(path string) []ChecksumRecord {
 		check(err)
 
 		if fi.Mode().IsRegular() {
-			records = append(records, FileChecksum(path))
+			records[path] = FileChecksum(path)
 		}
 
 		return nil
