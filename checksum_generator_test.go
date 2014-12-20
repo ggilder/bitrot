@@ -31,14 +31,14 @@ func TestFileChecksum(t *testing.T) {
 	fi, err = os.Stat(testFile)
 
 	correctModTime := fi.ModTime()
-	if fileChecksum.path != testFile {
-		t.Fatalf("expected path %s; got %s", testFile, fileChecksum.path)
+	if fileChecksum.Path != testFile {
+		t.Fatalf("expected path %s; got %s", testFile, fileChecksum.Path)
 	}
-	if fileChecksum.checksum != helloWorldChecksum {
-		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.checksum)
+	if fileChecksum.Checksum != helloWorldChecksum {
+		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.Checksum)
 	}
-	if fileChecksum.modTime != correctModTime {
-		t.Fatalf("expected modTime %s; got %s", correctModTime, fileChecksum.modTime)
+	if fileChecksum.ModTime != correctModTime {
+		t.Fatalf("expected modTime %s; got %s", correctModTime, fileChecksum.ModTime)
 	}
 }
 
@@ -62,26 +62,26 @@ func TestDirectoryManifest(t *testing.T) {
 
 	manifest := GenerateDirectoryManifest(tempDir)
 
-	if manifest.path != tempDir {
-		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.path)
+	if manifest.Path != tempDir {
+		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
 	}
 
-	if math.Abs(float64(manifest.createdAt.Unix()-expectedCreationTime.Unix())) > 5 {
-		t.Fatalf("expected manifest createdAt within 5s of %v, got %v", expectedCreationTime, manifest.createdAt)
+	if math.Abs(float64(manifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 5 {
+		t.Fatalf("expected manifest createdAt within 5s of %v, got %v", expectedCreationTime, manifest.CreatedAt)
 	}
 
-	if len(manifest.entries) != len(expectedChecksums) {
+	if len(manifest.Entries) != len(expectedChecksums) {
 		t.Fatalf(
 			"unexpected number of checksums! expected %d, got %d (%v)",
 			len(expectedChecksums),
-			len(manifest.entries),
-			manifest.entries,
+			len(manifest.Entries),
+			manifest.Entries,
 		)
 	}
 
-	for path, fileChecksum := range manifest.entries {
-		if fileChecksum.checksum != expectedChecksums[path] {
-			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.checksum)
+	for path, fileChecksum := range manifest.Entries {
+		if fileChecksum.Checksum != expectedChecksums[path] {
+			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.Checksum)
 		}
 	}
 }
