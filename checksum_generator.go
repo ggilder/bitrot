@@ -44,16 +44,19 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 
 func directoryChecksums(path string) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
-	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(path, func(entryPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		fi, err := os.Stat(path)
+		fi, err := os.Stat(entryPath)
 		check(err)
 
 		if fi.Mode().IsRegular() {
-			records[path] = FileChecksum(path)
+			var relPath string
+			relPath, err = filepath.Rel(path, entryPath)
+			check(err)
+			records[relPath] = FileChecksum(entryPath)
 		}
 
 		return nil

@@ -45,14 +45,14 @@ func TestDirectoryManifest(t *testing.T) {
 
 	defer os.RemoveAll(tempDir)
 
-	testFile := writeTestFile(tempDir, "foo", helloWorldString)
+	writeTestFile(tempDir, "foo", helloWorldString)
 	subdir := filepath.Join(tempDir, "bar", "baz", "stuff")
 	check(os.MkdirAll(subdir, 0755))
-	testFile2 := writeTestFile(subdir, "foo", helloWorldString)
+	writeTestFile(subdir, "foo", helloWorldString)
 
 	expectedChecksums := map[string]string{
-		testFile2: helloWorldChecksum,
-		testFile:  helloWorldChecksum,
+		"bar/baz/stuff/foo": helloWorldChecksum,
+		"foo":               helloWorldChecksum,
 	}
 
 	expectedCreationTime := time.Now()
