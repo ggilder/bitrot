@@ -56,10 +56,7 @@ func directoryChecksums(path string) map[string]ChecksumRecord {
 			return err
 		}
 
-		fi, err := os.Stat(entryPath)
-		check(err)
-
-		if fi.Mode().IsRegular() {
+		if info.Mode().IsRegular() {
 			var relPath string
 			relPath, err = filepath.Rel(path, entryPath)
 			check(err)
