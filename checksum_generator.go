@@ -29,14 +29,17 @@ func FileChecksum(file string) ChecksumRecord {
 	check(err)
 
 	sum := sha1.Sum(data)
-	return ChecksumRecord{hex.EncodeToString(sum[:]), fi.ModTime()}
+	return ChecksumRecord{
+		Checksum: hex.EncodeToString(sum[:]),
+		ModTime:  fi.ModTime(),
+	}
 }
 
 func GenerateDirectoryManifest(path string) DirectoryManifest {
 	return DirectoryManifest{
-		path,
-		time.Now(),
-		directoryChecksums(path),
+		Path:      path,
+		CreatedAt: time.Now(),
+		Entries:   directoryChecksums(path),
 	}
 }
 
