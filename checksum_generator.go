@@ -21,16 +21,12 @@ type DirectoryManifest struct {
 }
 
 func FileChecksum(file string) ChecksumRecord {
-	var fi os.FileInfo
-	data, err := ioutil.ReadFile(file)
+	fi, err := os.Stat(file)
 	check(err)
 
-	fi, err = os.Stat(file)
-	check(err)
-
-	sum := sha1.Sum(data)
+	sum := generateChecksum(file)
 	return ChecksumRecord{
-		Checksum: hex.EncodeToString(sum[:]),
+		Checksum: sum,
 		ModTime:  fi.ModTime(),
 	}
 }
@@ -44,6 +40,14 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 }
 
 // Private functions
+
+func generateChecksum(file string) string {
+	data, err := ioutil.ReadFile(file)
+	check(err)
+
+	sum := sha1.Sum(data)
+	return hex.EncodeToString(sum[:])
+}
 
 func directoryChecksums(path string) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
