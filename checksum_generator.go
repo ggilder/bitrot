@@ -20,6 +20,14 @@ type DirectoryManifest struct {
 	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
+// TODO implement this type
+type ManifestComparison struct {
+	DeletedPaths  []string
+	AddedPaths    []string
+	ModifiedPaths []string
+	FlaggedPaths  []string
+}
+
 func FileChecksum(file string) ChecksumRecord {
 	fi, err := os.Stat(file)
 	check(err)
