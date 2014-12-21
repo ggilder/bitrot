@@ -60,7 +60,10 @@ func directoryChecksums(path string) map[string]ChecksumRecord {
 			var relPath string
 			relPath, err = filepath.Rel(path, entryPath)
 			check(err)
-			records[relPath] = FileChecksum(entryPath)
+			records[relPath] = ChecksumRecord{
+				Checksum: generateChecksum(entryPath),
+				ModTime:  info.ModTime(),
+			}
 		}
 
 		return nil
