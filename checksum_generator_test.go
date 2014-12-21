@@ -100,26 +100,21 @@ func TestManifestJSON(t *testing.T) {
 
 	manifest := GenerateDirectoryManifest(tempDir)
 
-	var jsonBytes []byte
-	jsonBytes, err = json.Marshal(manifest)
+	jsonBytes, err := json.Marshal(manifest)
 
-	var jsonData map[string]interface{}
-	err = json.Unmarshal(jsonBytes, &jsonData)
+	var recreatedManifest DirectoryManifest
+	err = json.Unmarshal(jsonBytes, &recreatedManifest)
 	check(err)
 
-	if jsonData["path"] != tempDir {
-		t.Fatalf("expected JSON path %s, got %s", tempDir, jsonData["path"])
+	if recreatedManifest.Path != tempDir {
+		t.Fatalf("expected JSON path %s, got %s", tempDir, recreatedManifest.Path)
 	}
 
-	timeString, _ := jsonData["created_at"].(string)
-	var parsedTime time.Time
-	parsedTime, err = time.Parse(time.RFC3339, timeString)
-	check(err)
-	if math.Abs(float64(parsedTime.Unix()-expectedCreationTime.Unix())) > 0 {
-		t.Fatalf("expected manifest created_at within 0s of %v, got %v", expectedCreationTime, parsedTime)
+	if math.Abs(float64(recreatedManifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 0 {
+		t.Fatalf("expected manifest created_at within 0s of %v, got %v", expectedCreationTime, recreatedManifest.CreatedAt)
 	}
 
-	entries, _ := jsonData["entries"].(map[string]interface{})
+	entries := recreatedManifest.Entries
 	if len(entries) != len(expectedChecksums) {
 		t.Fatalf(
 			"unexpected number of checksums! expected %d, got %d (%v)",
@@ -129,12 +124,9 @@ func TestManifestJSON(t *testing.T) {
 		)
 	}
 
-	for path, fileChecksumJSON := range entries {
-		fileChecksum, _ := fileChecksumJSON.(map[string]interface{})
-		checksum, _ := fileChecksum["checksum"].(string)
-
-		if checksum != expectedChecksums[path] {
-			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], checksum)
+	for path, fileChecksum := range entries {
+		if fileChecksum.Checksum != expectedChecksums[path] {
+			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.Checksum)
 		}
 	}
 }
