@@ -48,28 +48,8 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 
 func CompareManifests(oldManifest, newManifest DirectoryManifest) ManifestComparison {
 	comparison := ManifestComparison{}
-	for path, oldEntry := range oldManifest.Entries {
-		newEntry, newEntryPresent := newManifest.Entries[path]
-
-		if newEntryPresent {
-			if newEntry.Checksum != oldEntry.Checksum {
-				if newEntry.ModTime != oldEntry.ModTime {
-					comparison.ModifiedPaths = append(comparison.ModifiedPaths, path)
-				} else {
-					comparison.FlaggedPaths = append(comparison.FlaggedPaths, path)
-				}
-			}
-		} else {
-			comparison.DeletedPaths = append(comparison.DeletedPaths, path)
-		}
-	}
-	for path, _ := range newManifest.Entries {
-		_, oldEntryPresent := oldManifest.Entries[path]
-		if !oldEntryPresent {
-			comparison.AddedPaths = append(comparison.AddedPaths, path)
-		}
-	}
-
+	checkAddedPaths(&oldManifest, &newManifest, &comparison)
+	checkChangedPaths(&oldManifest, &newManifest, &comparison)
 	return comparison
 }
 
@@ -103,6 +83,36 @@ func directoryChecksums(path string) map[string]ChecksumRecord {
 		return nil
 	})
 	return records
+}
+
+func checkAddedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
+	for path, _ := range newManifest.Entries {
+		_, oldEntryPresent := oldManifest.Entries[path]
+		if !oldEntryPresent {
+			comparison.AddedPaths = append(comparison.AddedPaths, path)
+		}
+	}
+}
+
+func checkChangedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
+	for path, oldEntry := range oldManifest.Entries {
+		newEntry, newEntryPresent := newManifest.Entries[path]
+		if newEntryPresent {
+			checkModifiedPath(path, &oldEntry, &newEntry, comparison)
+		} else {
+			comparison.DeletedPaths = append(comparison.DeletedPaths, path)
+		}
+	}
+}
+
+func checkModifiedPath(path string, oldEntry, newEntry *ChecksumRecord, comparison *ManifestComparison) {
+	if newEntry.Checksum != oldEntry.Checksum {
+		if newEntry.ModTime != oldEntry.ModTime {
+			comparison.ModifiedPaths = append(comparison.ModifiedPaths, path)
+		} else {
+			comparison.FlaggedPaths = append(comparison.FlaggedPaths, path)
+		}
+	}
 }
 
 func check(e error) {
