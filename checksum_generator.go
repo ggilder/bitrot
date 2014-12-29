@@ -20,7 +20,6 @@ type DirectoryManifest struct {
 	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
-// TODO implement this type
 type ManifestComparison struct {
 	DeletedPaths  []string
 	AddedPaths    []string
@@ -45,6 +44,33 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 		CreatedAt: time.Now(),
 		Entries:   directoryChecksums(path),
 	}
+}
+
+func CompareManifests(oldManifest, newManifest DirectoryManifest) ManifestComparison {
+	comparison := ManifestComparison{}
+	for path, oldEntry := range oldManifest.Entries {
+		newEntry, newEntryPresent := newManifest.Entries[path]
+
+		if newEntryPresent {
+			if newEntry.Checksum != oldEntry.Checksum {
+				if newEntry.ModTime != oldEntry.ModTime {
+					comparison.ModifiedPaths = append(comparison.ModifiedPaths, path)
+				} else {
+					comparison.FlaggedPaths = append(comparison.FlaggedPaths, path)
+				}
+			}
+		} else {
+			comparison.DeletedPaths = append(comparison.DeletedPaths, path)
+		}
+	}
+	for path, _ := range newManifest.Entries {
+		_, oldEntryPresent := oldManifest.Entries[path]
+		if !oldEntryPresent {
+			comparison.AddedPaths = append(comparison.AddedPaths, path)
+		}
+	}
+
+	return comparison
 }
 
 // Private functions

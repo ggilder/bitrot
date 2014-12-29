@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -128,5 +129,59 @@ func TestManifestJSON(t *testing.T) {
 		if fileChecksum.Checksum != expectedChecksums[path] {
 			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.Checksum)
 		}
+	}
+}
+
+func lastWeek(now time.Time) time.Time {
+	return time.Unix(now.Unix()-86400, 0)
+}
+
+func TestManifestComparison(t *testing.T) {
+	newCreatedAt := time.Now()
+	newModTime := time.Now()
+	oldManifest := DirectoryManifest{
+		Path:      "/old/stuff",
+		CreatedAt: lastWeek(newCreatedAt),
+		Entries: map[string]ChecksumRecord{
+			"silently_corrupted": ChecksumRecord{Checksum: "asdf", ModTime: lastWeek(newModTime)},
+			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: lastWeek(newModTime)},
+			"modified":           ChecksumRecord{Checksum: "qwer", ModTime: lastWeek(newModTime)},
+			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: lastWeek(newModTime)},
+			"deleted":            ChecksumRecord{Checksum: "jklh", ModTime: lastWeek(newModTime)},
+		},
+	}
+
+	newManifest := DirectoryManifest{
+		Path:      "/new/thing",
+		CreatedAt: newCreatedAt,
+		Entries: map[string]ChecksumRecord{
+			"silently_corrupted": ChecksumRecord{Checksum: "zzzz", ModTime: lastWeek(newModTime)},
+			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: lastWeek(newModTime)},
+			"modified":           ChecksumRecord{Checksum: "tyui", ModTime: newModTime},
+			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: newModTime},
+			"added":              ChecksumRecord{Checksum: "bnmv", ModTime: newModTime},
+		},
+	}
+
+	comparison := CompareManifests(oldManifest, newManifest)
+
+	expectedDeletedPaths := []string{"deleted"}
+	if !reflect.DeepEqual(comparison.DeletedPaths, expectedDeletedPaths) {
+		t.Fatalf("expected DeletedPaths %v; got %v", expectedDeletedPaths, comparison.DeletedPaths)
+	}
+
+	expectedModifiedPaths := []string{"modified"}
+	if !reflect.DeepEqual(comparison.ModifiedPaths, expectedModifiedPaths) {
+		t.Fatalf("expected ModifiedPaths %v; got %v", expectedModifiedPaths, comparison.ModifiedPaths)
+	}
+
+	expectedFlaggedPaths := []string{"silently_corrupted"}
+	if !reflect.DeepEqual(comparison.FlaggedPaths, expectedFlaggedPaths) {
+		t.Fatalf("expected FlaggedPaths %v; got %v", expectedFlaggedPaths, comparison.FlaggedPaths)
+	}
+
+	expectedAddedPaths := []string{"added"}
+	if !reflect.DeepEqual(comparison.AddedPaths, expectedAddedPaths) {
+		t.Fatalf("expected AddedPaths %v; got %v", expectedAddedPaths, comparison.AddedPaths)
 	}
 }
