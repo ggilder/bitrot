@@ -132,22 +132,20 @@ func TestManifestJSON(t *testing.T) {
 	}
 }
 
-func lastWeek(now time.Time) time.Time {
-	return time.Unix(now.Unix()-86400, 0)
-}
-
 func TestManifestComparison(t *testing.T) {
 	newCreatedAt := time.Now()
 	newModTime := time.Now()
+	oldCreatedAt := newCreatedAt.Add(-24 * time.Hour)
+	oldModTime := newModTime.Add(-24 * time.Hour)
 	oldManifest := DirectoryManifest{
 		Path:      "/old/stuff",
-		CreatedAt: lastWeek(newCreatedAt),
+		CreatedAt: oldCreatedAt,
 		Entries: map[string]ChecksumRecord{
-			"silently_corrupted": ChecksumRecord{Checksum: "asdf", ModTime: lastWeek(newModTime)},
-			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: lastWeek(newModTime)},
-			"modified":           ChecksumRecord{Checksum: "qwer", ModTime: lastWeek(newModTime)},
-			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: lastWeek(newModTime)},
-			"deleted":            ChecksumRecord{Checksum: "jklh", ModTime: lastWeek(newModTime)},
+			"silently_corrupted": ChecksumRecord{Checksum: "asdf", ModTime: oldModTime},
+			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: oldModTime},
+			"modified":           ChecksumRecord{Checksum: "qwer", ModTime: oldModTime},
+			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: oldModTime},
+			"deleted":            ChecksumRecord{Checksum: "jklh", ModTime: oldModTime},
 		},
 	}
 
@@ -155,8 +153,8 @@ func TestManifestComparison(t *testing.T) {
 		Path:      "/new/thing",
 		CreatedAt: newCreatedAt,
 		Entries: map[string]ChecksumRecord{
-			"silently_corrupted": ChecksumRecord{Checksum: "zzzz", ModTime: lastWeek(newModTime)},
-			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: lastWeek(newModTime)},
+			"silently_corrupted": ChecksumRecord{Checksum: "zzzz", ModTime: oldModTime},
+			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: oldModTime},
 			"modified":           ChecksumRecord{Checksum: "tyui", ModTime: newModTime},
 			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: newModTime},
 			"added":              ChecksumRecord{Checksum: "bnmv", ModTime: newModTime},
