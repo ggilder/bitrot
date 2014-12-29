@@ -46,8 +46,7 @@ func GenerateDirectoryManifest(path string) DirectoryManifest {
 	}
 }
 
-func CompareManifests(oldManifest, newManifest DirectoryManifest) ManifestComparison {
-	comparison := ManifestComparison{}
+func CompareManifests(oldManifest, newManifest DirectoryManifest) (comparison ManifestComparison) {
 	checkAddedPaths(&oldManifest, &newManifest, &comparison)
 	checkChangedPaths(&oldManifest, &newManifest, &comparison)
 	return comparison
