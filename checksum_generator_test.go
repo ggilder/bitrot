@@ -65,7 +65,8 @@ func TestDirectoryManifest(t *testing.T) {
 
 	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
 
-	manifest := GenerateDirectoryManifest(tempDir)
+	config := Config{}
+	manifest := GenerateDirectoryManifest(tempDir, &config)
 
 	if manifest.Path != tempDir {
 		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
@@ -91,6 +92,50 @@ func TestDirectoryManifest(t *testing.T) {
 	}
 }
 
+func TestManifestExclusionOnFile(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	check(err)
+
+	defer os.RemoveAll(tempDir)
+
+	populateTestDirectory(tempDir)
+
+	config := Config{
+		ExcludedFiles: []string{"foo"},
+	}
+
+	manifest := GenerateDirectoryManifest(tempDir, &config)
+
+	if !reflect.DeepEqual(manifest.Entries, map[string]ChecksumRecord{}) {
+		t.Fatalf("Entries mismatch; expected %v, got %v", map[string]ChecksumRecord{}, manifest.Entries)
+	}
+}
+
+func TestManifestExclusionOnFolder(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	check(err)
+
+	defer os.RemoveAll(tempDir)
+
+	populateTestDirectory(tempDir)
+
+	config := Config{
+		ExcludedFiles: []string{"baz"},
+	}
+
+	manifest := GenerateDirectoryManifest(tempDir, &config)
+
+	entryPaths := []string{}
+	for path := range manifest.Entries {
+		entryPaths = append(entryPaths, path)
+	}
+	expectedEntryPaths := []string{"foo"}
+
+	if !reflect.DeepEqual(entryPaths, expectedEntryPaths) {
+		t.Fatalf("Entries mismatch; expected %v, got %v", expectedEntryPaths, entryPaths)
+	}
+}
+
 func TestManifestJSON(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	check(err)
@@ -99,7 +144,8 @@ func TestManifestJSON(t *testing.T) {
 
 	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
 
-	manifest := GenerateDirectoryManifest(tempDir)
+	config := Config{}
+	manifest := GenerateDirectoryManifest(tempDir, &config)
 
 	jsonBytes, err := json.Marshal(manifest)
 
