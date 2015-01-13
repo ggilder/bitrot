@@ -6,8 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+type Config struct {
+	ExcludedFiles []string
+}
 
 type ChecksumRecord struct {
 	Checksum string    `json:"checksum"`
@@ -38,11 +43,11 @@ func FileChecksum(file string) ChecksumRecord {
 	}
 }
 
-func GenerateDirectoryManifest(path string) DirectoryManifest {
+func GenerateDirectoryManifest(path string, config *Config) DirectoryManifest {
 	return DirectoryManifest{
 		Path:      path,
 		CreatedAt: time.Now(),
-		Entries:   directoryChecksums(path),
+		Entries:   directoryChecksums(path, config),
 	}
 }
 
@@ -62,11 +67,27 @@ func generateChecksum(file string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func directoryChecksums(path string) map[string]ChecksumRecord {
+func isIgnoredPath(path string, ignored *[]string) bool {
+	parts := strings.Split(path, string(filepath.Separator))
+	for _, part := range parts {
+		for _, ignoredName := range *ignored {
+			if part == ignoredName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
 	filepath.Walk(path, func(entryPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		if isIgnoredPath(entryPath, &config.ExcludedFiles) {
+			return nil
 		}
 
 		if info.Mode().IsRegular() {
