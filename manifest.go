@@ -124,9 +124,3 @@ func checkModifiedPath(path string, oldEntry, newEntry *ChecksumRecord, comparis
 		}
 	}
 }
-
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}

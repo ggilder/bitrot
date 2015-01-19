@@ -21,3 +21,10 @@ func (c *Config) isIgnoredPath(path string) bool {
 	}
 	return false
 }
+
+// General helper functions
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
