@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Config for bitrot checks such as file/folder names to exclude.
 type Config struct {
 	ExcludedFiles []string
 }

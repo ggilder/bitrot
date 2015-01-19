@@ -9,17 +9,21 @@ import (
 	"time"
 )
 
+// ChecksumRecord stores checksum and metadata for a file.
 type ChecksumRecord struct {
 	Checksum string    `json:"checksum"`
 	ModTime  time.Time `json:"mod_time"`
 }
 
+// Manifest of all files under a path.
 type Manifest struct {
 	Path      string                    `json:"path"`
 	CreatedAt time.Time                 `json:"created_at"`
 	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
+// ManifestComparison of two Manifests, showing paths that have been deleted,
+// added, modified, or flagged for suspicious checksum changes.
 type ManifestComparison struct {
 	DeletedPaths  []string
 	AddedPaths    []string
@@ -27,6 +31,7 @@ type ManifestComparison struct {
 	FlaggedPaths  []string
 }
 
+// ChecksumRecordForFile generates a ChecksumRecord from a file path.
 func ChecksumRecordForFile(file string) ChecksumRecord {
 	fi, err := os.Stat(file)
 	check(err)
@@ -38,6 +43,7 @@ func ChecksumRecordForFile(file string) ChecksumRecord {
 	}
 }
 
+// ManifestForPath generates a Manifest from a directory path.
 func ManifestForPath(path string, config *Config) Manifest {
 	return Manifest{
 		Path:      path,
@@ -46,6 +52,7 @@ func ManifestForPath(path string, config *Config) Manifest {
 	}
 }
 
+// CompareManifests generates a comparison between new and old Manifests.
 func CompareManifests(oldManifest, newManifest Manifest) (comparison ManifestComparison) {
 	checkAddedPaths(&oldManifest, &newManifest, &comparison)
 	checkChangedPaths(&oldManifest, &newManifest, &comparison)
@@ -89,7 +96,7 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 }
 
 func checkAddedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
-	for path, _ := range newManifest.Entries {
+	for path := range newManifest.Entries {
 		_, oldEntryPresent := oldManifest.Entries[path]
 		if !oldEntryPresent {
 			comparison.AddedPaths = append(comparison.AddedPaths, path)
