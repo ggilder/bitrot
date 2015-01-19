@@ -1,4 +1,4 @@
-package checksum_generator
+package bitrot
 
 import (
 	"encoding/json"

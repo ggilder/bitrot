@@ -1,4 +1,4 @@
-package checksum_generator
+package bitrot
 
 import (
 	"crypto/sha1"
