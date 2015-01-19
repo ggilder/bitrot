@@ -10,10 +10,10 @@ type Config struct {
 	ExcludedFiles []string
 }
 
-func isIgnoredPath(path string, ignored *[]string) bool {
+func (c *Config) isIgnoredPath(path string) bool {
 	parts := strings.Split(path, string(filepath.Separator))
 	for _, part := range parts {
-		for _, ignoredName := range *ignored {
+		for _, ignoredName := range c.ExcludedFiles {
 			if part == ignoredName {
 				return true
 			}

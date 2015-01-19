@@ -76,7 +76,7 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 			return err
 		}
 
-		if isIgnoredPath(entryPath, &config.ExcludedFiles) {
+		if config.isIgnoredPath(entryPath) {
 			return nil
 		}
 
