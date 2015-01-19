@@ -44,7 +44,7 @@ func TestFileChecksum(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	testFile := writeTestFile(tempDir, "foo", helloWorldString)
-	fileChecksum := FileChecksum(testFile)
+	fileChecksum := ChecksumRecordForFile(testFile)
 	var fi os.FileInfo
 	fi, err = os.Stat(testFile)
 
@@ -66,7 +66,7 @@ func TestDirectoryManifest(t *testing.T) {
 	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
 
 	config := Config{}
-	manifest := GenerateDirectoryManifest(tempDir, &config)
+	manifest := ManifestForPath(tempDir, &config)
 
 	if manifest.Path != tempDir {
 		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
@@ -104,7 +104,7 @@ func TestManifestExclusionOnFile(t *testing.T) {
 		ExcludedFiles: []string{"foo"},
 	}
 
-	manifest := GenerateDirectoryManifest(tempDir, &config)
+	manifest := ManifestForPath(tempDir, &config)
 
 	if !reflect.DeepEqual(manifest.Entries, map[string]ChecksumRecord{}) {
 		t.Fatalf("Entries mismatch; expected %v, got %v", map[string]ChecksumRecord{}, manifest.Entries)
@@ -123,7 +123,7 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 		ExcludedFiles: []string{"baz"},
 	}
 
-	manifest := GenerateDirectoryManifest(tempDir, &config)
+	manifest := ManifestForPath(tempDir, &config)
 
 	entryPaths := []string{}
 	for path := range manifest.Entries {
@@ -145,11 +145,11 @@ func TestManifestJSON(t *testing.T) {
 	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
 
 	config := Config{}
-	manifest := GenerateDirectoryManifest(tempDir, &config)
+	manifest := ManifestForPath(tempDir, &config)
 
 	jsonBytes, err := json.Marshal(manifest)
 
-	var recreatedManifest DirectoryManifest
+	var recreatedManifest Manifest
 	err = json.Unmarshal(jsonBytes, &recreatedManifest)
 	check(err)
 
@@ -183,7 +183,7 @@ func TestManifestComparison(t *testing.T) {
 	newModTime := time.Now()
 	oldCreatedAt := newCreatedAt.Add(-24 * time.Hour)
 	oldModTime := newModTime.Add(-24 * time.Hour)
-	oldManifest := DirectoryManifest{
+	oldManifest := Manifest{
 		Path:      "/old/stuff",
 		CreatedAt: oldCreatedAt,
 		Entries: map[string]ChecksumRecord{
@@ -195,7 +195,7 @@ func TestManifestComparison(t *testing.T) {
 		},
 	}
 
-	newManifest := DirectoryManifest{
+	newManifest := Manifest{
 		Path:      "/new/thing",
 		CreatedAt: newCreatedAt,
 		Entries: map[string]ChecksumRecord{

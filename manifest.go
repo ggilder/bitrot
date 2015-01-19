@@ -14,7 +14,7 @@ type ChecksumRecord struct {
 	ModTime  time.Time `json:"mod_time"`
 }
 
-type DirectoryManifest struct {
+type Manifest struct {
 	Path      string                    `json:"path"`
 	CreatedAt time.Time                 `json:"created_at"`
 	Entries   map[string]ChecksumRecord `json:"entries"`
@@ -27,7 +27,7 @@ type ManifestComparison struct {
 	FlaggedPaths  []string
 }
 
-func FileChecksum(file string) ChecksumRecord {
+func ChecksumRecordForFile(file string) ChecksumRecord {
 	fi, err := os.Stat(file)
 	check(err)
 
@@ -38,15 +38,15 @@ func FileChecksum(file string) ChecksumRecord {
 	}
 }
 
-func GenerateDirectoryManifest(path string, config *Config) DirectoryManifest {
-	return DirectoryManifest{
+func ManifestForPath(path string, config *Config) Manifest {
+	return Manifest{
 		Path:      path,
 		CreatedAt: time.Now(),
 		Entries:   directoryChecksums(path, config),
 	}
 }
 
-func CompareManifests(oldManifest, newManifest DirectoryManifest) (comparison ManifestComparison) {
+func CompareManifests(oldManifest, newManifest Manifest) (comparison ManifestComparison) {
 	checkAddedPaths(&oldManifest, &newManifest, &comparison)
 	checkChangedPaths(&oldManifest, &newManifest, &comparison)
 	return comparison
@@ -88,7 +88,7 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 	return records
 }
 
-func checkAddedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
+func checkAddedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
 	for path, _ := range newManifest.Entries {
 		_, oldEntryPresent := oldManifest.Entries[path]
 		if !oldEntryPresent {
@@ -97,7 +97,7 @@ func checkAddedPaths(oldManifest, newManifest *DirectoryManifest, comparison *Ma
 	}
 }
 
-func checkChangedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
+func checkChangedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
 	for path, oldEntry := range oldManifest.Entries {
 		newEntry, newEntryPresent := newManifest.Entries[path]
 		if newEntryPresent {
