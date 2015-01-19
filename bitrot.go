@@ -1,4 +1,12 @@
-package bitrot
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	fmt.Println("Hello world")
+}
 
 // General helper functions
 func check(e error) {
