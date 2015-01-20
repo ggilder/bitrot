@@ -2,4 +2,4 @@
 
 # bitrot
 
-The file system is just waiting to lose your data.
+The file system is just waiting to lose your data. But bitrot is watching.
