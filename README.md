@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/ggilder/fufs.svg?branch=master)](https://travis-ci.org/ggilder/fufs)
+[![Build Status](https://travis-ci.org/ggilder/bitrot.svg?branch=master)](https://travis-ci.org/ggilder/bitrot)
 
-# fufs
+# bitrot
 
-F U file system
+The file system is just waiting to lose your data.
