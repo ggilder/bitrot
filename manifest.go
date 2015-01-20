@@ -1,4 +1,4 @@
-package checksum_generator
+package bitrot
 
 import (
 	"crypto/sha1"
@@ -6,25 +6,24 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
-type Config struct {
-	ExcludedFiles []string
-}
-
+// ChecksumRecord stores checksum and metadata for a file.
 type ChecksumRecord struct {
 	Checksum string    `json:"checksum"`
 	ModTime  time.Time `json:"mod_time"`
 }
 
-type DirectoryManifest struct {
+// Manifest of all files under a path.
+type Manifest struct {
 	Path      string                    `json:"path"`
 	CreatedAt time.Time                 `json:"created_at"`
 	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
+// ManifestComparison of two Manifests, showing paths that have been deleted,
+// added, modified, or flagged for suspicious checksum changes.
 type ManifestComparison struct {
 	DeletedPaths  []string
 	AddedPaths    []string
@@ -32,7 +31,8 @@ type ManifestComparison struct {
 	FlaggedPaths  []string
 }
 
-func FileChecksum(file string) ChecksumRecord {
+// ChecksumRecordForFile generates a ChecksumRecord from a file path.
+func ChecksumRecordForFile(file string) ChecksumRecord {
 	fi, err := os.Stat(file)
 	check(err)
 
@@ -43,15 +43,17 @@ func FileChecksum(file string) ChecksumRecord {
 	}
 }
 
-func GenerateDirectoryManifest(path string, config *Config) DirectoryManifest {
-	return DirectoryManifest{
+// ManifestForPath generates a Manifest from a directory path.
+func ManifestForPath(path string, config *Config) Manifest {
+	return Manifest{
 		Path:      path,
 		CreatedAt: time.Now(),
 		Entries:   directoryChecksums(path, config),
 	}
 }
 
-func CompareManifests(oldManifest, newManifest DirectoryManifest) (comparison ManifestComparison) {
+// CompareManifests generates a comparison between new and old Manifests.
+func CompareManifests(oldManifest, newManifest Manifest) (comparison ManifestComparison) {
 	checkAddedPaths(&oldManifest, &newManifest, &comparison)
 	checkChangedPaths(&oldManifest, &newManifest, &comparison)
 	return comparison
@@ -67,18 +69,6 @@ func generateChecksum(file string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func isIgnoredPath(path string, ignored *[]string) bool {
-	parts := strings.Split(path, string(filepath.Separator))
-	for _, part := range parts {
-		for _, ignoredName := range *ignored {
-			if part == ignoredName {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 	records := map[string]ChecksumRecord{}
 	filepath.Walk(path, func(entryPath string, info os.FileInfo, err error) error {
@@ -86,7 +76,7 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 			return err
 		}
 
-		if isIgnoredPath(entryPath, &config.ExcludedFiles) {
+		if config.isIgnoredPath(entryPath) {
 			return nil
 		}
 
@@ -105,8 +95,8 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 	return records
 }
 
-func checkAddedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
-	for path, _ := range newManifest.Entries {
+func checkAddedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
+	for path := range newManifest.Entries {
 		_, oldEntryPresent := oldManifest.Entries[path]
 		if !oldEntryPresent {
 			comparison.AddedPaths = append(comparison.AddedPaths, path)
@@ -114,7 +104,7 @@ func checkAddedPaths(oldManifest, newManifest *DirectoryManifest, comparison *Ma
 	}
 }
 
-func checkChangedPaths(oldManifest, newManifest *DirectoryManifest, comparison *ManifestComparison) {
+func checkChangedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
 	for path, oldEntry := range oldManifest.Entries {
 		newEntry, newEntryPresent := newManifest.Entries[path]
 		if newEntryPresent {
@@ -132,11 +122,5 @@ func checkModifiedPath(path string, oldEntry, newEntry *ChecksumRecord, comparis
 		} else {
 			comparison.FlaggedPaths = append(comparison.FlaggedPaths, path)
 		}
-	}
-}
-
-func check(e error) {
-	if e != nil {
-		panic(e)
 	}
 }
