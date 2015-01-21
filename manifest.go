@@ -65,7 +65,11 @@ func generateChecksum(file string) string {
 	data, err := ioutil.ReadFile(file)
 	check(err)
 
-	sum := sha1.Sum(data)
+	return checksumHexString(&data)
+}
+
+func checksumHexString(data *[]byte) string {
+	sum := sha1.Sum(*data)
 	return hex.EncodeToString(sum[:])
 }
 
