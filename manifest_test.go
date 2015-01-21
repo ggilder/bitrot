@@ -16,7 +16,7 @@ var helloWorldChecksum = "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
 
 func writeTestFile(dir, name, content string) string {
 	testFile := filepath.Join(dir, name)
-	err := ioutil.WriteFile(testFile, []byte(content), 0400)
+	err := ioutil.WriteFile(testFile, []byte(content), 0644)
 	check(err)
 	return testFile
 }
