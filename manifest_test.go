@@ -1,5 +1,6 @@
 package main
 
+// TODO refactor tests to use assert library like `bitrot_test.go`
 import (
 	"encoding/json"
 	"io/ioutil"
