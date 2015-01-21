@@ -48,7 +48,7 @@ func TestFileChecksum(t *testing.T) {
 	var fi os.FileInfo
 	fi, err = os.Stat(testFile)
 
-	correctModTime := fi.ModTime()
+	correctModTime := fi.ModTime().UTC()
 	if fileChecksum.Checksum != helloWorldChecksum {
 		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.Checksum)
 	}
