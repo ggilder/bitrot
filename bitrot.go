@@ -24,15 +24,15 @@ const (
 )
 
 // go-flags requires us to wrap positional args in a struct
-type PathWrapped struct {
+type GenerateArguments struct {
 	Path flags.Filename `name:"PATH" description:"Path to directory."`
 }
 
 // Options/arguments for the `generate` command
 type Generate struct {
-	Exclude     []string    `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Pretty      bool        `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
-	PathWrapper PathWrapped `required:"true" positional-args:"true"`
+	Exclude   []string          `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
+	Pretty    bool              `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
+	Arguments GenerateArguments `required:"true" positional-args:"true"`
 }
 
 type ManifestFile struct {
@@ -65,7 +65,7 @@ func ManifestFileFromManifest(manifest *Manifest, pretty bool) *ManifestFile {
 
 // Extracts string path from wrapper and converts it to an absolute path
 func (cmd *Generate) PathString() string {
-	path, err := filepath.Abs(string(cmd.PathWrapper.Path))
+	path, err := filepath.Abs(string(cmd.Arguments.Path))
 	check(err)
 	return path
 }
