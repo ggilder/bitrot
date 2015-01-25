@@ -1,5 +1,6 @@
-package bitrot
+package main
 
+// TODO refactor tests to use assert library like `bitrot_test.go`
 import (
 	"encoding/json"
 	"io/ioutil"
@@ -16,7 +17,7 @@ var helloWorldChecksum = "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
 
 func writeTestFile(dir, name, content string) string {
 	testFile := filepath.Join(dir, name)
-	err := ioutil.WriteFile(testFile, []byte(content), 0400)
+	err := ioutil.WriteFile(testFile, []byte(content), 0644)
 	check(err)
 	return testFile
 }
@@ -48,7 +49,7 @@ func TestFileChecksum(t *testing.T) {
 	var fi os.FileInfo
 	fi, err = os.Stat(testFile)
 
-	correctModTime := fi.ModTime()
+	correctModTime := fi.ModTime().UTC()
 	if fileChecksum.Checksum != helloWorldChecksum {
 		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.Checksum)
 	}

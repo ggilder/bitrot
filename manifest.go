@@ -1,4 +1,4 @@
-package bitrot
+package main
 
 import (
 	"crypto/sha1"
@@ -39,7 +39,7 @@ func ChecksumRecordForFile(file string) ChecksumRecord {
 	sum := generateChecksum(file)
 	return ChecksumRecord{
 		Checksum: sum,
-		ModTime:  fi.ModTime(),
+		ModTime:  fi.ModTime().UTC(),
 	}
 }
 
@@ -47,7 +47,7 @@ func ChecksumRecordForFile(file string) ChecksumRecord {
 func ManifestForPath(path string, config *Config) Manifest {
 	return Manifest{
 		Path:      path,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 		Entries:   directoryChecksums(path, config),
 	}
 }
@@ -65,7 +65,11 @@ func generateChecksum(file string) string {
 	data, err := ioutil.ReadFile(file)
 	check(err)
 
-	sum := sha1.Sum(data)
+	return checksumHexString(&data)
+}
+
+func checksumHexString(data *[]byte) string {
+	sum := sha1.Sum(*data)
 	return hex.EncodeToString(sum[:])
 }
 
@@ -86,7 +90,7 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 			check(err)
 			records[relPath] = ChecksumRecord{
 				Checksum: generateChecksum(entryPath),
-				ModTime:  info.ModTime(),
+				ModTime:  info.ModTime().UTC(),
 			}
 		}
 
