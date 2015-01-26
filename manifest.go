@@ -31,18 +31,6 @@ type ManifestComparison struct {
 	FlaggedPaths  []string
 }
 
-// ChecksumRecordForFile generates a ChecksumRecord from a file path.
-func ChecksumRecordForFile(file string) ChecksumRecord {
-	fi, err := os.Stat(file)
-	check(err)
-
-	sum := generateChecksum(file)
-	return ChecksumRecord{
-		Checksum: sum,
-		ModTime:  fi.ModTime().UTC(),
-	}
-}
-
 // NewManifest generates a Manifest from a directory path.
 func NewManifest(path string, config *Config) *Manifest {
 	return &Manifest{

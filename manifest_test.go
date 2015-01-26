@@ -39,27 +39,6 @@ func populateTestDirectory(tempDir string) (map[string]string, time.Time) {
 	return expectedChecksums, expectedCreationTime
 }
 
-func TestFileChecksum(t *testing.T) {
-	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
-
-	defer os.RemoveAll(tempDir)
-
-	testFile := writeTestFile(tempDir, "foo", helloWorldString)
-	fileChecksum := ChecksumRecordForFile(testFile)
-	var fi os.FileInfo
-	fi, err = os.Stat(testFile)
-	check(err)
-
-	correctModTime := fi.ModTime().UTC()
-	if fileChecksum.Checksum != helloWorldChecksum {
-		t.Fatalf("expected checksum %s; got %s", helloWorldChecksum, fileChecksum.Checksum)
-	}
-	if fileChecksum.ModTime != correctModTime {
-		t.Fatalf("expected modTime %s; got %s", correctModTime, fileChecksum.ModTime)
-	}
-}
-
 func TestDirectoryManifest(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	check(err)
