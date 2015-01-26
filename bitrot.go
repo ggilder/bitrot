@@ -42,7 +42,7 @@ type ManifestFile struct {
 }
 
 // TODO break this func down a bit and unit test?
-func ManifestFileFromManifest(manifest *Manifest, pretty bool) *ManifestFile {
+func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 	var jsonBytes []byte
 	var err error
 	if pretty {
@@ -86,7 +86,7 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	check(err)
 
 	manifest := NewManifest(path, config)
-	manifestFile := ManifestFileFromManifest(manifest, cmd.Pretty)
+	manifestFile := NewManifestFile(manifest, cmd.Pretty)
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
