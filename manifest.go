@@ -43,9 +43,9 @@ func ChecksumRecordForFile(file string) ChecksumRecord {
 	}
 }
 
-// ManifestForPath generates a Manifest from a directory path.
-func ManifestForPath(path string, config *Config) Manifest {
-	return Manifest{
+// NewManifest generates a Manifest from a directory path.
+func NewManifest(path string, config *Config) *Manifest {
+	return &Manifest{
 		Path:      path,
 		CreatedAt: time.Now().UTC(),
 		Entries:   directoryChecksums(path, config),

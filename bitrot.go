@@ -85,8 +85,8 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	err = os.Mkdir(manifestDir, 0755)
 	check(err)
 
-	manifest := ManifestForPath(path, config)
-	manifestFile := ManifestFileFromManifest(&manifest, cmd.Pretty)
+	manifest := NewManifest(path, config)
+	manifestFile := ManifestFileFromManifest(manifest, cmd.Pretty)
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
