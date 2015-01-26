@@ -1,6 +1,7 @@
 package main
 
-// TODO refactor tests to use assert library like `bitrot_test.go`
+// TODO refactor tests to use testify/assert library like `bitrot_test.go` and
+// testify/suite to extract common before/after hooks
 import (
 	"encoding/json"
 	"io/ioutil"
