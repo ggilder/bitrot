@@ -49,6 +49,7 @@ func TestFileChecksum(t *testing.T) {
 	fileChecksum := ChecksumRecordForFile(testFile)
 	var fi os.FileInfo
 	fi, err = os.Stat(testFile)
+	check(err)
 
 	correctModTime := fi.ModTime().UTC()
 	if fileChecksum.Checksum != helloWorldChecksum {
