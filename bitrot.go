@@ -25,7 +25,7 @@ const (
 
 // go-flags requires us to wrap positional args in a struct
 type PathArguments struct {
-	Path flags.Filename `name:"PATH" description:"Path to directory."`
+	Path flags.Filename `positional-arg-name:"PATH" description:"Path to directory."`
 }
 
 // Options/arguments for the `generate` command
