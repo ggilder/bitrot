@@ -24,15 +24,15 @@ const (
 )
 
 // go-flags requires us to wrap positional args in a struct
-type GenerateArguments struct {
+type PathArguments struct {
 	Path flags.Filename `name:"PATH" description:"Path to directory."`
 }
 
 // Options/arguments for the `generate` command
 type Generate struct {
-	Exclude   []string          `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Pretty    bool              `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
-	Arguments GenerateArguments `required:"true" positional-args:"true"`
+	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
+	Pretty    bool          `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
+	Arguments PathArguments `required:"true" positional-args:"true"`
 }
 
 type ManifestFile struct {
@@ -64,8 +64,8 @@ func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 }
 
 // Extracts string path from wrapper and converts it to an absolute path
-func (cmd *Generate) PathString() string {
-	path, err := filepath.Abs(string(cmd.Arguments.Path))
+func (args *PathArguments) PathString() string {
+	path, err := filepath.Abs(string(args.Path))
 	check(err)
 	return path
 }
@@ -76,7 +76,7 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args)
-	path := cmd.PathString()
+	path := cmd.Arguments.PathString()
 
 	log.Printf("Generating manifest for %s...\n", path)
 

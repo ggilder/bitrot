@@ -7,15 +7,15 @@ import (
 )
 
 func TestPathStringExtractsPath(t *testing.T) {
-	cmd := Generate{Arguments: GenerateArguments{Path: "/foo/bar"}}
-	path := cmd.PathString()
+	args := PathArguments{Path: "/foo/bar"}
+	path := args.PathString()
 	assert.Equal(t, "/foo/bar", path)
 }
 
 func TestPathStringIsAbsolute(t *testing.T) {
 	dir, _ := os.Getwd()
-	cmd := Generate{Arguments: GenerateArguments{Path: "."}}
-	path := cmd.PathString()
+	args := PathArguments{Path: "."}
+	path := args.PathString()
 	assert.Equal(t, dir, path)
 }
 
