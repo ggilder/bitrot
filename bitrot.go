@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ const (
 	version              = "0.0.1"
 	manifestDirName      = ".bitrot"
 	manifestNameTemplate = "manifest-%s-%s.json"
+	manifestGlob         = "manifest-*.json"
 	// RFC3339 minus punctuation characters, better for filenames
 	manifestNameTimeFormat = "20060102T150405Z07:00"
 )
@@ -32,6 +34,13 @@ type PathArguments struct {
 type Generate struct {
 	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
 	Pretty    bool          `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
+	Arguments PathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
+}
+
+// Options/arguments for the `validate` command
+type Validate struct {
+	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
 	Arguments PathArguments `required:"true" positional-args:"true"`
 	logger    *log.Logger
 }
@@ -61,6 +70,27 @@ func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 		Manifest:  manifest,
 		JSONBytes: jsonBytes,
 		Filename:  manifestName,
+	}
+}
+
+func LatestManifestFileForPath(path string) *ManifestFile {
+	manifestDir := filepath.Join(path, manifestDirName)
+	manifestPaths, err := filepath.Glob(filepath.Join(manifestDir, manifestGlob))
+	check(err)
+	sort.Sort(sort.Reverse(sort.StringSlice(manifestPaths)))
+
+	manifestPath := manifestPaths[0]
+	jsonBytes, err := ioutil.ReadFile(manifestPath)
+	check(err)
+
+	var manifest Manifest
+	err = json.Unmarshal(jsonBytes, &manifest)
+	check(err)
+
+	return &ManifestFile{
+		Manifest:  &manifest,
+		JSONBytes: jsonBytes,
+		Filename:  manifestPath,
 	}
 }
 
@@ -103,6 +133,48 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	return nil
 }
 
+func (cmd *Validate) Execute(args []string) (err error) {
+	config := DefaultConfig()
+	if len(cmd.Exclude) > 0 {
+		config.ExcludedFiles = cmd.Exclude
+	}
+	assertNoExtraArgs(&args, cmd.logger)
+	path := cmd.Arguments.PathString()
+
+	cmd.logger.Printf("Validating manifest for %s...\n", path)
+
+	currentManifest := NewManifest(path, config)
+	latestManifestFile := LatestManifestFileForPath(path)
+	comparison := CompareManifests(latestManifestFile.Manifest, currentManifest)
+
+	logPaths("Added", comparison.AddedPaths, cmd.logger)
+	logPaths("Deleted", comparison.DeletedPaths, cmd.logger)
+	logPaths("Modified", comparison.ModifiedPaths, cmd.logger)
+	flagged := logPaths("Flagged", comparison.FlaggedPaths, cmd.logger)
+
+	if flagged > 0 {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+	} else {
+		cmd.logger.Printf("Validated manifest for %s.\n", path)
+	}
+
+	return nil
+}
+
+func logPaths(description string, paths []string, logger *log.Logger) int {
+	count := len(paths)
+	if count > 0 {
+		logger.Printf("%s paths:\n", description)
+		for _, path := range paths {
+			logger.Printf("    %s\n", path)
+		}
+	} else {
+		logger.Printf("%s paths: none.", description)
+	}
+	return count
+}
+
 func assertNoExtraArgs(args *[]string, logger *log.Logger) {
 	if len(*args) > 0 {
 		logger.Fatalf("Unrecognized arguments: %s\n", strings.Join(*args, " "))
@@ -135,10 +207,11 @@ func main() {
 	}
 	var parser = flags.NewParser(&AppOpts, flags.Default)
 	generate := Generate{logger: logger}
+	validate := Validate{logger: logger}
 	var err error
 	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
 	check(err)
-	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &generate)
+	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &validate)
 	check(err)
 	parser.Parse()
 }
