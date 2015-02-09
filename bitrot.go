@@ -33,6 +33,7 @@ type Generate struct {
 	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
 	Pretty    bool          `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
 	Arguments PathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
 }
 
 type ManifestFile struct {
@@ -75,10 +76,10 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	if len(cmd.Exclude) > 0 {
 		config.ExcludedFiles = cmd.Exclude
 	}
-	assertNoExtraArgs(&args)
+	assertNoExtraArgs(&args, cmd.logger)
 	path := cmd.Arguments.PathString()
 
-	log.Printf("Generating manifest for %s...\n", path)
+	cmd.logger.Printf("Generating manifest for %s...\n", path)
 
 	// Prepare manifest file destination
 	manifestDir := filepath.Join(path, manifestDirName)
@@ -93,17 +94,17 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		err = ioutil.WriteFile(manifestPath, manifestFile.JSONBytes, 0644)
 		check(err)
 
-		log.Printf("Wrote manifest to %s\n", manifestPath)
+		cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 	} else {
-		log.Fatalf("Manifest file already exists! Path: %s\n", manifestPath)
+		cmd.logger.Fatalf("Manifest file already exists! Path: %s\n", manifestPath)
 	}
 
 	return nil
 }
 
-func assertNoExtraArgs(args *[]string) {
+func assertNoExtraArgs(args *[]string, logger *log.Logger) {
 	if len(*args) > 0 {
-		log.Fatalf("Unrecognized arguments: %s\n", strings.Join(*args, " "))
+		logger.Fatalf("Unrecognized arguments: %s\n", strings.Join(*args, " "))
 	}
 }
 
@@ -123,8 +124,7 @@ func check(e error) {
 }
 
 func main() {
-	// Don't print timestamp on log messages
-	log.SetFlags(0)
+	logger := log.New(os.Stderr, "", 0)
 	var AppOpts struct {
 		Version func() `long:"version" short:"v"`
 	}
@@ -133,7 +133,7 @@ func main() {
 		os.Exit(0)
 	}
 	var parser = flags.NewParser(&AppOpts, flags.Default)
-	var generate Generate
+	generate := Generate{logger: logger}
 	var err error
 	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
 	check(err)
