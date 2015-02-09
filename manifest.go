@@ -41,9 +41,10 @@ func NewManifest(path string, config *Config) *Manifest {
 }
 
 // CompareManifests generates a comparison between new and old Manifests.
-func CompareManifests(oldManifest, newManifest Manifest) (comparison ManifestComparison) {
-	checkAddedPaths(&oldManifest, &newManifest, &comparison)
-	checkChangedPaths(&oldManifest, &newManifest, &comparison)
+func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
+	comparison := &ManifestComparison{}
+	checkAddedPaths(oldManifest, newManifest, comparison)
+	checkChangedPaths(oldManifest, newManifest, comparison)
 	return comparison
 }
 

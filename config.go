@@ -13,6 +13,8 @@ var defaultExcludedFiles = []string{
 	// VCS folders
 	".git",
 	".svn",
+	// ignore the manifest dir itself
+	manifestDirName,
 }
 
 // Config for bitrot checks such as file/folder names to exclude.

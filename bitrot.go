@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -19,20 +20,29 @@ const (
 	version              = "0.0.1"
 	manifestDirName      = ".bitrot"
 	manifestNameTemplate = "manifest-%s-%s.json"
+	manifestGlob         = "manifest-*.json"
 	// RFC3339 minus punctuation characters, better for filenames
 	manifestNameTimeFormat = "20060102T150405Z07:00"
 )
 
 // go-flags requires us to wrap positional args in a struct
-type GenerateArguments struct {
-	Path flags.Filename `name:"PATH" description:"Path to directory."`
+type PathArguments struct {
+	Path flags.Filename `positional-arg-name:"PATH" description:"Path to directory."`
 }
 
 // Options/arguments for the `generate` command
 type Generate struct {
-	Exclude   []string          `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Pretty    bool              `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
-	Arguments GenerateArguments `required:"true" positional-args:"true"`
+	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
+	Pretty    bool          `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
+	Arguments PathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
+}
+
+// Options/arguments for the `validate` command
+type Validate struct {
+	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
+	Arguments PathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
 }
 
 type ManifestFile struct {
@@ -63,9 +73,30 @@ func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 	}
 }
 
+func LatestManifestFileForPath(path string) *ManifestFile {
+	manifestDir := filepath.Join(path, manifestDirName)
+	manifestPaths, err := filepath.Glob(filepath.Join(manifestDir, manifestGlob))
+	check(err)
+	sort.Sort(sort.Reverse(sort.StringSlice(manifestPaths)))
+
+	manifestPath := manifestPaths[0]
+	jsonBytes, err := ioutil.ReadFile(manifestPath)
+	check(err)
+
+	var manifest Manifest
+	err = json.Unmarshal(jsonBytes, &manifest)
+	check(err)
+
+	return &ManifestFile{
+		Manifest:  &manifest,
+		JSONBytes: jsonBytes,
+		Filename:  manifestPath,
+	}
+}
+
 // Extracts string path from wrapper and converts it to an absolute path
-func (cmd *Generate) PathString() string {
-	path, err := filepath.Abs(string(cmd.Arguments.Path))
+func (args *PathArguments) PathString() string {
+	path, err := filepath.Abs(string(args.Path))
 	check(err)
 	return path
 }
@@ -75,14 +106,15 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	if len(cmd.Exclude) > 0 {
 		config.ExcludedFiles = cmd.Exclude
 	}
-	assertNoExtraArgs(&args)
-	path := cmd.PathString()
+	assertNoExtraArgs(&args, cmd.logger)
+	path := cmd.Arguments.PathString()
 
-	log.Printf("Generating manifest for %s...\n", path)
+	cmd.logger.Printf("Generating manifest for %s...\n", path)
 
 	// Prepare manifest file destination
 	manifestDir := filepath.Join(path, manifestDirName)
-	err = os.Mkdir(manifestDir, 0755)
+	// Using MkdirAll because it doesn't return an error when the path is already a directory
+	err = os.MkdirAll(manifestDir, 0755)
 	check(err)
 
 	manifest := NewManifest(path, config)
@@ -93,17 +125,59 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		err = ioutil.WriteFile(manifestPath, manifestFile.JSONBytes, 0644)
 		check(err)
 
-		log.Printf("Wrote manifest to %s\n", manifestPath)
+		cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 	} else {
-		log.Fatalf("Manifest file already exists! Path: %s\n", manifestPath)
+		cmd.logger.Fatalf("Manifest file already exists! Path: %s\n", manifestPath)
 	}
 
 	return nil
 }
 
-func assertNoExtraArgs(args *[]string) {
+func (cmd *Validate) Execute(args []string) (err error) {
+	config := DefaultConfig()
+	if len(cmd.Exclude) > 0 {
+		config.ExcludedFiles = cmd.Exclude
+	}
+	assertNoExtraArgs(&args, cmd.logger)
+	path := cmd.Arguments.PathString()
+
+	cmd.logger.Printf("Validating manifest for %s...\n", path)
+
+	currentManifest := NewManifest(path, config)
+	latestManifestFile := LatestManifestFileForPath(path)
+	comparison := CompareManifests(latestManifestFile.Manifest, currentManifest)
+
+	logPaths("Added", comparison.AddedPaths, cmd.logger)
+	logPaths("Deleted", comparison.DeletedPaths, cmd.logger)
+	logPaths("Modified", comparison.ModifiedPaths, cmd.logger)
+	flagged := logPaths("Flagged", comparison.FlaggedPaths, cmd.logger)
+
+	if flagged > 0 {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+	} else {
+		cmd.logger.Printf("Validated manifest for %s.\n", path)
+	}
+
+	return nil
+}
+
+func logPaths(description string, paths []string, logger *log.Logger) int {
+	count := len(paths)
+	if count > 0 {
+		logger.Printf("%s paths:\n", description)
+		for _, path := range paths {
+			logger.Printf("    %s\n", path)
+		}
+	} else {
+		logger.Printf("%s paths: none.", description)
+	}
+	return count
+}
+
+func assertNoExtraArgs(args *[]string, logger *log.Logger) {
 	if len(*args) > 0 {
-		log.Fatalf("Unrecognized arguments: %s\n", strings.Join(*args, " "))
+		logger.Fatalf("Unrecognized arguments: %s\n", strings.Join(*args, " "))
 	}
 }
 
@@ -123,8 +197,7 @@ func check(e error) {
 }
 
 func main() {
-	// Don't print timestamp on log messages
-	log.SetFlags(0)
+	logger := log.New(os.Stderr, "", 0)
 	var AppOpts struct {
 		Version func() `long:"version" short:"v"`
 	}
@@ -133,11 +206,12 @@ func main() {
 		os.Exit(0)
 	}
 	var parser = flags.NewParser(&AppOpts, flags.Default)
-	var generate Generate
+	generate := Generate{logger: logger}
+	validate := Validate{logger: logger}
 	var err error
 	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
 	check(err)
-	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &generate)
+	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &validate)
 	check(err)
 	parser.Parse()
 }

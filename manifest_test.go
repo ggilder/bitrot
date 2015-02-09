@@ -189,7 +189,7 @@ func TestManifestComparison(t *testing.T) {
 		},
 	}
 
-	comparison := CompareManifests(oldManifest, newManifest)
+	comparison := CompareManifests(&oldManifest, &newManifest)
 
 	expectedDeletedPaths := []string{"deleted"}
 	if !reflect.DeepEqual(comparison.DeletedPaths, expectedDeletedPaths) {
