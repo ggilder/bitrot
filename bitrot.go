@@ -83,7 +83,8 @@ func (cmd *Generate) Execute(args []string) (err error) {
 
 	// Prepare manifest file destination
 	manifestDir := filepath.Join(path, manifestDirName)
-	err = os.Mkdir(manifestDir, 0755)
+	// Using MkdirAll because it doesn't return an error when the path is already a directory
+	err = os.MkdirAll(manifestDir, 0755)
 	check(err)
 
 	manifest := NewManifest(path, config)
