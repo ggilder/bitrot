@@ -114,6 +114,11 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 	suite.Len(manifestFile.Manifest.Entries, 2)
 }
 
+func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPathWithNoManifest() {
+	manifestFile := LatestManifestFileForPath(suite.tempDir)
+	suite.Nil(manifestFile)
+}
+
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
@@ -135,6 +140,12 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
 	suite.LogContains("Flagged paths:\n    foo/bar\n")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.validateCommand().Execute([]string{})
+	suite.LogContains(fmt.Sprintf("No previous manifest to validate for %s.", suite.tempDir))
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {

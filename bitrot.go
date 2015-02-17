@@ -79,6 +79,10 @@ func LatestManifestFileForPath(path string) *ManifestFile {
 	check(err)
 	sort.Sort(sort.Reverse(sort.StringSlice(manifestPaths)))
 
+	if len(manifestPaths) == 0 {
+		return nil
+	}
+
 	manifestPath := manifestPaths[0]
 	jsonBytes, err := ioutil.ReadFile(manifestPath)
 	check(err)
@@ -145,6 +149,13 @@ func (cmd *Validate) Execute(args []string) (err error) {
 
 	currentManifest := NewManifest(path, config)
 	latestManifestFile := LatestManifestFileForPath(path)
+
+	if latestManifestFile == nil {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("No previous manifest to validate for %s.\n", path)
+		return nil
+	}
+
 	comparison := CompareManifests(latestManifestFile.Manifest, currentManifest)
 
 	logPaths("Added", comparison.AddedPaths, cmd.logger)
