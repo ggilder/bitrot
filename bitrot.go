@@ -137,6 +137,8 @@ func (cmd *Generate) Execute(args []string) (err error) {
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		err = os.MkdirAll(manifestDir, 0755)
+		check(err)
 		err = ioutil.WriteFile(manifestPath, manifestFile.JSONBytes, 0644)
 		check(err)
 
