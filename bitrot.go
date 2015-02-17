@@ -122,6 +122,17 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	check(err)
 
 	manifest := NewManifest(path, config)
+
+	// Potentially validate manifest against previous
+	latestManifestFile := LatestManifestFileForPath(path)
+	if latestManifestFile != nil {
+		ts := latestManifestFile.Manifest.CreatedAt.Format(manifestNameTimeFormat)
+		cmd.logger.Printf("Comparing to previous manifest from %s\n", ts)
+		comparison := CompareManifests(latestManifestFile.Manifest, manifest)
+		cmd.logger.Printf(manifestComparisonReportString(comparison))
+	}
+
+	// Write new manifest
 	manifestFile := NewManifestFile(manifest, cmd.Pretty)
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
