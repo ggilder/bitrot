@@ -17,14 +17,14 @@ import (
 
 func TestPathStringExtractsPath(t *testing.T) {
 	args := PathArguments{Path: "/foo/bar"}
-	path := args.PathString()
+	path := pathString(args.Path)
 	assert.Equal(t, "/foo/bar", path)
 }
 
 func TestPathStringIsAbsolute(t *testing.T) {
 	dir, _ := os.Getwd()
 	args := PathArguments{Path: "."}
-	path := args.PathString()
+	path := pathString(args.Path)
 	assert.Equal(t, dir, path)
 }
 

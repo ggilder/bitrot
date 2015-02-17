@@ -99,8 +99,8 @@ func LatestManifestFileForPath(path string) *ManifestFile {
 }
 
 // Extracts string path from wrapper and converts it to an absolute path
-func (args *PathArguments) PathString() string {
-	path, err := filepath.Abs(string(args.Path))
+func pathString(name flags.Filename) string {
+	path, err := filepath.Abs(string(name))
 	check(err)
 	return path
 }
@@ -111,7 +111,7 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args, cmd.logger)
-	path := cmd.Arguments.PathString()
+	path := pathString(cmd.Arguments.Path)
 
 	cmd.logger.Printf("Generating manifest for %s...\n", path)
 
@@ -154,7 +154,7 @@ func (cmd *Validate) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args, cmd.logger)
-	path := cmd.Arguments.PathString()
+	path := pathString(cmd.Arguments.Path)
 
 	cmd.logger.Printf("Validating manifest for %s...\n", path)
 
