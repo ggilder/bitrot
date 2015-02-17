@@ -79,6 +79,10 @@ func LatestManifestFileForPath(path string) *ManifestFile {
 	check(err)
 	sort.Sort(sort.Reverse(sort.StringSlice(manifestPaths)))
 
+	if len(manifestPaths) == 0 {
+		return nil
+	}
+
 	manifestPath := manifestPaths[0]
 	jsonBytes, err := ioutil.ReadFile(manifestPath)
 	check(err)
@@ -118,6 +122,17 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	check(err)
 
 	manifest := NewManifest(path, config)
+
+	// Potentially validate manifest against previous
+	latestManifestFile := LatestManifestFileForPath(path)
+	if latestManifestFile != nil {
+		ts := latestManifestFile.Manifest.CreatedAt.Format(manifestNameTimeFormat)
+		cmd.logger.Printf("Comparing to previous manifest from %s\n", ts)
+		comparison := CompareManifests(latestManifestFile.Manifest, manifest)
+		cmd.logger.Printf(manifestComparisonReportString(comparison))
+	}
+
+	// Write new manifest
 	manifestFile := NewManifestFile(manifest, cmd.Pretty)
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
@@ -145,13 +160,17 @@ func (cmd *Validate) Execute(args []string) (err error) {
 
 	currentManifest := NewManifest(path, config)
 	latestManifestFile := LatestManifestFileForPath(path)
+
+	if latestManifestFile == nil {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("No previous manifest to validate for %s.\n", path)
+		return nil
+	}
+
 	comparison := CompareManifests(latestManifestFile.Manifest, currentManifest)
+	cmd.logger.Printf(manifestComparisonReportString(comparison))
 
-	logPaths("Added", comparison.AddedPaths, cmd.logger)
-	logPaths("Deleted", comparison.DeletedPaths, cmd.logger)
-	logPaths("Modified", comparison.ModifiedPaths, cmd.logger)
-	flagged := logPaths("Flagged", comparison.FlaggedPaths, cmd.logger)
-
+	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
 		// TODO: want to use Fatalf here but can't seem to catch it in tests
 		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
@@ -162,17 +181,25 @@ func (cmd *Validate) Execute(args []string) (err error) {
 	return nil
 }
 
-func logPaths(description string, paths []string, logger *log.Logger) int {
+func manifestComparisonReportString(comparison *ManifestComparison) string {
+	return pathSection("Added", comparison.AddedPaths) +
+		pathSection("Deleted", comparison.DeletedPaths) +
+		pathSection("Modified", comparison.ModifiedPaths) +
+		pathSection("Flagged", comparison.FlaggedPaths)
+}
+
+func pathSection(description string, paths []string) string {
+	s := ""
 	count := len(paths)
 	if count > 0 {
-		logger.Printf("%s paths:\n", description)
+		s += fmt.Sprintf("%s paths:\n", description)
 		for _, path := range paths {
-			logger.Printf("    %s\n", path)
+			s += fmt.Sprintf("    %s\n", path)
 		}
 	} else {
-		logger.Printf("%s paths: none.", description)
+		s += fmt.Sprintf("%s paths: none.\n", description)
 	}
-	return count
+	return s
 }
 
 func assertNoExtraArgs(args *[]string, logger *log.Logger) {

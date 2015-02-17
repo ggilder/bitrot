@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func (suite *CommandsIntegrationTestSuite) SetupTest() {
 	var err error
 	suite.tempDir, err = ioutil.TempDir("", "checksum")
 	check(err)
-	suite.logBuffer.Reset()
+	suite.clearLog()
 	suite.logger = log.New(&suite.logBuffer, "", 0)
 }
 
@@ -62,7 +63,22 @@ func (suite *CommandsIntegrationTestSuite) corruptTestFile(path string) {
 	check(err)
 	contents[0] = contents[0] ^ 255
 	ioutil.WriteFile(testFile, contents, 0644)
-	check(os.Chtimes(testFile, stat.ModTime(), stat.ModTime()))
+
+	check(suite.backdateTestFile(path, stat.ModTime()))
+}
+
+func (suite *CommandsIntegrationTestSuite) deleteTestFile(path string) {
+	testFile := filepath.Join(suite.tempDir, path)
+	check(os.Remove(testFile))
+}
+
+func (suite *CommandsIntegrationTestSuite) backdateTestFile(path string, to time.Time) error {
+	testFile := filepath.Join(suite.tempDir, path)
+	return os.Chtimes(testFile, to, to)
+}
+
+func (suite *CommandsIntegrationTestSuite) clearLog() {
+	suite.logBuffer.Reset()
 }
 
 func (suite *CommandsIntegrationTestSuite) generateCommand() *Generate {
@@ -81,6 +97,10 @@ func (suite *CommandsIntegrationTestSuite) validateCommand() *Validate {
 		},
 		logger: suite.logger,
 	}
+}
+
+func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
+	suite.Contains(suite.logBuffer.String(), text)
 }
 
 func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
@@ -106,23 +126,81 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 	suite.Len(manifestFile.Manifest.Entries, 2)
 }
 
+func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPathWithNoManifest() {
+	manifestFile := LatestManifestFileForPath(suite.tempDir)
+	suite.Nil(manifestFile)
+}
+
+func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.generateCommand().Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Wrote manifest to %s", suite.tempDir))
+}
+
+func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifest() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.generateCommand().Execute([]string{})
+	suite.clearLog()
+
+	// Get SHA & date from manifest
+	manifestPaths, err := filepath.Glob(filepath.Join(suite.tempDir, manifestDirName, manifestGlob))
+	check(err)
+	manifestPath := manifestPaths[0]
+	re := regexp.MustCompile("manifest-([^-]+)-([^.]+).json$")
+	matches := re.FindAllStringSubmatch(manifestPath, -1)
+	ts := matches[0][1]
+
+	suite.generateCommand().Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts))
+	suite.LogContains("Added paths: none")
+	suite.LogContains("Deleted paths: none")
+	suite.LogContains("Modified paths: none")
+	suite.LogContains("Flagged paths: none")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifestFailure() {
+	suite.writeTestFile("foo/flagged", helloWorldString)
+	suite.writeTestFile("foo/modified", helloWorldString)
+	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
+	suite.writeTestFile("foo/deleted", helloWorldString)
+	suite.generateCommand().Execute([]string{})
+	suite.clearLog()
+
+	suite.writeTestFile("foo/added", helloWorldString)
+	suite.writeTestFile("foo/modified", "")
+	suite.corruptTestFile("foo/flagged")
+	suite.deleteTestFile("foo/deleted")
+
+	suite.generateCommand().Execute([]string{})
+	suite.LogContains("Added paths:\n    foo/added")
+	suite.LogContains("Deleted paths:\n    foo/deleted")
+	suite.LogContains("Modified paths:\n    foo/modified")
+	suite.LogContains("Flagged paths:\n    foo/flagged")
+}
+
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
+	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
-	suite.Contains(suite.logBuffer.String(), fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
+	suite.LogContains(fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
 	suite.corruptTestFile("foo/bar")
+	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
-	suite.Contains(suite.logBuffer.String(), "Flagged paths:\n    foo/bar\n")
+	suite.LogContains("Flagged paths:\n    foo/bar\n")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.validateCommand().Execute([]string{})
+	suite.LogContains(fmt.Sprintf("No previous manifest to validate for %s.", suite.tempDir))
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {
 	suite.Run(t, new(CommandsIntegrationTestSuite))
 }
-
-// TODO write integration test for `generate` command?
