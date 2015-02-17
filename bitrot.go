@@ -30,6 +30,11 @@ type PathArguments struct {
 	Path flags.Filename `positional-arg-name:"PATH" description:"Path to directory."`
 }
 
+type ComparedPathArguments struct {
+	Old flags.Filename `positional-arg-name:"OLDPATH" description:"Path to old or original directory."`
+	New flags.Filename `positional-arg-name:"NEWPATH" description:"Path to new or copy directory."`
+}
+
 // Options/arguments for the `generate` command
 type Generate struct {
 	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
@@ -42,6 +47,13 @@ type Generate struct {
 type Validate struct {
 	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
 	Arguments PathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
+}
+
+// Options/arguments for the `compare` command
+type Compare struct {
+	Exclude   []string              `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
+	Arguments ComparedPathArguments `required:"true" positional-args:"true"`
 	logger    *log.Logger
 }
 
@@ -176,6 +188,32 @@ func (cmd *Validate) Execute(args []string) (err error) {
 		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
 	} else {
 		cmd.logger.Printf("Validated manifest for %s.\n", path)
+	}
+
+	return nil
+}
+
+func (cmd *Compare) Execute(args []string) (err error) {
+	config := DefaultConfig()
+	if len(cmd.Exclude) > 0 {
+		config.ExcludedFiles = cmd.Exclude
+	}
+	assertNoExtraArgs(&args, cmd.logger)
+	oldPath := pathString(cmd.Arguments.Old)
+	newPath := pathString(cmd.Arguments.New)
+
+	oldManifest := NewManifest(oldPath, config)
+	newManifest := NewManifest(newPath, config)
+
+	comparison := CompareManifests(oldManifest, newManifest)
+	cmd.logger.Printf(manifestComparisonReportString(comparison))
+
+	flagged := len(comparison.FlaggedPaths)
+	if flagged > 0 {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+	} else {
+		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
 	}
 
 	return nil

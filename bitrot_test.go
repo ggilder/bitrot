@@ -47,6 +47,35 @@ func (suite *CommandsIntegrationTestSuite) TearDownTest() {
 	os.RemoveAll(suite.tempDir)
 }
 
+func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
+	tempDirCopy, err := ioutil.TempDir("", "checksum")
+	check(err)
+
+	// super dumb directory copy
+	err = filepath.Walk(suite.tempDir, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if fi.Mode().IsRegular() {
+			relPath, err := filepath.Rel(suite.tempDir, path)
+			check(err)
+			destPath := filepath.Join(tempDirCopy, relPath)
+			dir := filepath.Dir(destPath)
+			check(os.MkdirAll(dir, 0755))
+			data, err := ioutil.ReadFile(path)
+			check(err)
+			check(ioutil.WriteFile(destPath, data, 0644))
+			err = os.Chtimes(destPath, fi.ModTime(), fi.ModTime())
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return tempDirCopy
+}
+
 func (suite *CommandsIntegrationTestSuite) writeTestFile(path, content string) {
 	testFile := filepath.Join(suite.tempDir, path)
 	dir := filepath.Dir(testFile)
@@ -94,6 +123,16 @@ func (suite *CommandsIntegrationTestSuite) validateCommand() *Validate {
 	return &Validate{
 		Arguments: PathArguments{
 			Path: flags.Filename(suite.tempDir),
+		},
+		logger: suite.logger,
+	}
+}
+
+func (suite *CommandsIntegrationTestSuite) compareCommand(oldPath string) *Compare {
+	return &Compare{
+		Arguments: ComparedPathArguments{
+			Old: flags.Filename(oldPath),
+			New: flags.Filename(suite.tempDir),
 		},
 		logger: suite.logger,
 	}
@@ -199,6 +238,34 @@ func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.validateCommand().Execute([]string{})
 	suite.LogContains(fmt.Sprintf("No previous manifest to validate for %s.", suite.tempDir))
+}
+
+func (suite *CommandsIntegrationTestSuite) TestCompare() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	oldTempDir := suite.copyTempDir()
+	suite.compareCommand(oldTempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
+}
+
+func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
+	suite.writeTestFile("foo/flagged", helloWorldString)
+	suite.writeTestFile("foo/modified", helloWorldString)
+	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
+	suite.writeTestFile("foo/deleted", helloWorldString)
+	oldTempDir := suite.copyTempDir()
+
+	// make modifications
+	suite.writeTestFile("foo/added", helloWorldString)
+	suite.writeTestFile("foo/modified", "")
+	suite.corruptTestFile("foo/flagged")
+	suite.deleteTestFile("foo/deleted")
+
+	suite.compareCommand(oldTempDir).Execute([]string{})
+	suite.LogContains("1 files flagged for possible corruption.")
+	suite.LogContains("Added paths:\n    foo/added")
+	suite.LogContains("Deleted paths:\n    foo/deleted")
+	suite.LogContains("Modified paths:\n    foo/modified")
+	suite.LogContains("Flagged paths:\n    foo/flagged")
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {
