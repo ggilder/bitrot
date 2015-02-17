@@ -38,7 +38,7 @@ func (suite *CommandsIntegrationTestSuite) SetupTest() {
 	var err error
 	suite.tempDir, err = ioutil.TempDir("", "checksum")
 	check(err)
-	suite.logBuffer.Reset()
+	suite.clearLog()
 	suite.logger = log.New(&suite.logBuffer, "", 0)
 }
 
@@ -63,6 +63,10 @@ func (suite *CommandsIntegrationTestSuite) corruptTestFile(path string) {
 	contents[0] = contents[0] ^ 255
 	ioutil.WriteFile(testFile, contents, 0644)
 	check(os.Chtimes(testFile, stat.ModTime(), stat.ModTime()))
+}
+
+func (suite *CommandsIntegrationTestSuite) clearLog() {
+	suite.logBuffer.Reset()
 }
 
 func (suite *CommandsIntegrationTestSuite) generateCommand() *Generate {
@@ -109,6 +113,7 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
+	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
 	suite.Contains(suite.logBuffer.String(), fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
 }
@@ -117,6 +122,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
 	suite.corruptTestFile("foo/bar")
+	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
 	suite.Contains(suite.logBuffer.String(), "Flagged paths:\n    foo/bar\n")
 }
