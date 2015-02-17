@@ -87,6 +87,10 @@ func (suite *CommandsIntegrationTestSuite) validateCommand() *Validate {
 	}
 }
 
+func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
+	suite.Contains(suite.logBuffer.String(), text)
+}
+
 func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	generate := suite.generateCommand()
@@ -113,7 +117,7 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
-	suite.Contains(suite.logBuffer.String(), fmt.Sprintf("Wrote manifest to %s", suite.tempDir))
+	suite.LogContains(fmt.Sprintf("Wrote manifest to %s", suite.tempDir))
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
@@ -121,7 +125,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 	suite.generateCommand().Execute([]string{})
 	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
-	suite.Contains(suite.logBuffer.String(), fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
+	suite.LogContains(fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
@@ -130,7 +134,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	suite.corruptTestFile("foo/bar")
 	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
-	suite.Contains(suite.logBuffer.String(), "Flagged paths:\n    foo/bar\n")
+	suite.LogContains("Flagged paths:\n    foo/bar\n")
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {
