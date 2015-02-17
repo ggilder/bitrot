@@ -110,6 +110,12 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 	suite.Len(manifestFile.Manifest.Entries, 2)
 }
 
+func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.generateCommand().Execute([]string{})
+	suite.Contains(suite.logBuffer.String(), fmt.Sprintf("Wrote manifest to %s", suite.tempDir))
+}
+
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	suite.generateCommand().Execute([]string{})
@@ -130,5 +136,3 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 func TestCommandsIntegrationTestSuite(t *testing.T) {
 	suite.Run(t, new(CommandsIntegrationTestSuite))
 }
-
-// TODO write integration test for `generate` command?
