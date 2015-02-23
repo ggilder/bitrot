@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,10 +50,10 @@ func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
 // Private functions
 
 func generateChecksum(file string) string {
-	data, err := ioutil.ReadFile(file)
+	reader := newSha1Reader(file)
+	sum, err := reader.SHA1Sum()
 	check(err)
-
-	return checksumHexString(&data)
+	return hex.EncodeToString(sum)
 }
 
 func checksumHexString(data *[]byte) string {
