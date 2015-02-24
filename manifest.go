@@ -50,7 +50,9 @@ func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
 // Private functions
 
 func generateChecksum(file string) string {
-	reader := newSha1Reader(file)
+	// TODO: experiment with varying buffer to determine optimal size
+	bufferSize := 10 * 1024 * 1024 // 10MiB buffer
+	reader := newSha1Reader(file, bufferSize)
 	sum, err := reader.SHA1Sum()
 	check(err)
 	return hex.EncodeToString(sum)

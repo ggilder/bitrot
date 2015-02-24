@@ -8,16 +8,18 @@ import (
 )
 
 type sha1Reader struct {
-	hash   hash.Hash
-	reader io.ReadSeeker
+	hash       hash.Hash
+	reader     io.ReadSeeker
+	bufferSize int
 }
 
-func newSha1Reader(path string) *sha1Reader {
+func newSha1Reader(path string, bufferSize int) *sha1Reader {
 	file, err := os.Open(path)
 	check(err)
 	return &sha1Reader{
-		hash:   sha1.New(),
-		reader: file,
+		hash:       sha1.New(),
+		reader:     file,
+		bufferSize: bufferSize,
 	}
 }
 
@@ -34,9 +36,8 @@ func (r *sha1Reader) SHA1Sum() ([]byte, error) {
 }
 
 func (r *sha1Reader) readAll() (err error) {
-	readSize := 10 * 1024 * 1024
 	for {
-		b := make([]byte, readSize, readSize)
+		b := make([]byte, r.bufferSize, r.bufferSize)
 		n, err := r.reader.Read(b)
 		if err != nil && err != io.EOF {
 			return err
