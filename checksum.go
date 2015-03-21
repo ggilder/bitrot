@@ -47,5 +47,4 @@ func (r *sha1Reader) readAll() (err error) {
 			return nil
 		}
 	}
-	return nil
 }
