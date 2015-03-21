@@ -169,11 +169,11 @@ func TestManifestComparison(t *testing.T) {
 		Path:      "/old/stuff",
 		CreatedAt: oldCreatedAt,
 		Entries: map[string]ChecksumRecord{
-			"silently_corrupted": ChecksumRecord{Checksum: "asdf", ModTime: oldModTime},
-			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: oldModTime},
-			"modified":           ChecksumRecord{Checksum: "qwer", ModTime: oldModTime},
-			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: oldModTime},
-			"deleted":            ChecksumRecord{Checksum: "jklh", ModTime: oldModTime},
+			"silently_corrupted": {Checksum: "asdf", ModTime: oldModTime},
+			"not_changed":        {Checksum: "zxcv", ModTime: oldModTime},
+			"modified":           {Checksum: "qwer", ModTime: oldModTime},
+			"touched":            {Checksum: "olkm", ModTime: oldModTime},
+			"deleted":            {Checksum: "jklh", ModTime: oldModTime},
 		},
 	}
 
@@ -181,11 +181,11 @@ func TestManifestComparison(t *testing.T) {
 		Path:      "/new/thing",
 		CreatedAt: newCreatedAt,
 		Entries: map[string]ChecksumRecord{
-			"silently_corrupted": ChecksumRecord{Checksum: "zzzz", ModTime: oldModTime},
-			"not_changed":        ChecksumRecord{Checksum: "zxcv", ModTime: oldModTime},
-			"modified":           ChecksumRecord{Checksum: "tyui", ModTime: newModTime},
-			"touched":            ChecksumRecord{Checksum: "olkm", ModTime: newModTime},
-			"added":              ChecksumRecord{Checksum: "bnmv", ModTime: newModTime},
+			"silently_corrupted": {Checksum: "zzzz", ModTime: oldModTime},
+			"not_changed":        {Checksum: "zxcv", ModTime: oldModTime},
+			"modified":           {Checksum: "tyui", ModTime: newModTime},
+			"touched":            {Checksum: "olkm", ModTime: newModTime},
+			"added":              {Checksum: "bnmv", ModTime: newModTime},
 		},
 	}
 
