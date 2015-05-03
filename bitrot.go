@@ -273,10 +273,13 @@ func main() {
 	var parser = flags.NewParser(&AppOpts, flags.Default)
 	generate := Generate{logger: logger}
 	validate := Validate{logger: logger}
+	compare := Compare{logger: logger}
 	var err error
 	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
 	check(err)
 	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &validate)
+	check(err)
+	_, err = parser.AddCommand("compare", "Compare manifests", "Compare manifests for two directories", &compare)
 	check(err)
 	parser.Parse()
 }
