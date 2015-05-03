@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"golang.org/x/text/unicode/norm"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,6 +79,8 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 			var relPath string
 			relPath, err = filepath.Rel(path, entryPath)
 			check(err)
+			// Normalize Unicode combining characters
+			relPath = norm.NFC.String(relPath)
 			records[relPath] = ChecksumRecord{
 				Checksum: generateChecksum(entryPath),
 				ModTime:  info.ModTime().UTC(),
