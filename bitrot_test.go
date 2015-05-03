@@ -138,6 +138,16 @@ func (suite *CommandsIntegrationTestSuite) compareCommand(oldPath string) *Compa
 	}
 }
 
+func (suite *CommandsIntegrationTestSuite) compareLatestManifestsCommand(oldPath string) *CompareLatestManifests {
+	return &CompareLatestManifests{
+		Arguments: ComparedPathArguments{
+			Old: flags.Filename(oldPath),
+			New: flags.Filename(suite.tempDir),
+		},
+		logger: suite.logger,
+	}
+}
+
 func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
 	suite.Contains(suite.logBuffer.String(), text)
 }
@@ -266,6 +276,27 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 	suite.LogContains("Deleted paths:\n    foo/deleted")
 	suite.LogContains("Modified paths:\n    foo/modified")
 	suite.LogContains("Flagged paths:\n    foo/flagged")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+	suite.generateCommand().Execute([]string{})
+	oldTempDir := suite.copyTempDir()
+	suite.generateCommand().Execute([]string{})
+	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
+}
+
+func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifestsMissingManifest() {
+	oldTempDir := suite.copyTempDir()
+	suite.generateCommand().Execute([]string{})
+	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("No existing manifest for %s\n", oldTempDir))
+
+	err := os.Rename(filepath.Join(suite.tempDir, ".bitrot"), filepath.Join(oldTempDir, ".bitrot"))
+	check(err)
+	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("No existing manifest for %s\n", suite.tempDir))
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {
