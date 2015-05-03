@@ -13,6 +13,8 @@ var defaultExcludedFiles = []string{
 	// VCS folders
 	".git",
 	".svn",
+	// Synology filesystem metadata
+	"@eaDir",
 	// ignore the manifest dir itself
 	manifestDirName,
 }
