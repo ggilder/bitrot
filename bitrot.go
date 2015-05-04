@@ -57,6 +57,12 @@ type Compare struct {
 	logger    *log.Logger
 }
 
+// Options/arguments for the `compare-latest-manifests` command
+type CompareLatestManifests struct {
+	Arguments ComparedPathArguments `required:"true" positional-args:"true"`
+	logger    *log.Logger
+}
+
 type ManifestFile struct {
 	Manifest  *Manifest
 	JSONBytes []byte
@@ -219,6 +225,37 @@ func (cmd *Compare) Execute(args []string) (err error) {
 	return nil
 }
 
+func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
+	assertNoExtraArgs(&args, cmd.logger)
+	oldPath := pathString(cmd.Arguments.Old)
+	newPath := pathString(cmd.Arguments.New)
+
+	oldManifest := LatestManifestFileForPath(oldPath)
+	newManifest := LatestManifestFileForPath(newPath)
+
+	if oldManifest == nil {
+		cmd.logger.Printf("No existing manifest for %s\n", oldPath)
+		return nil
+	}
+	if newManifest == nil {
+		cmd.logger.Printf("No existing manifest for %s\n", newPath)
+		return nil
+	}
+
+	comparison := CompareManifests(oldManifest.Manifest, newManifest.Manifest)
+	cmd.logger.Printf(manifestComparisonReportString(comparison))
+
+	flagged := len(comparison.FlaggedPaths)
+	if flagged > 0 {
+		// TODO: want to use Fatalf here but can't seem to catch it in tests
+		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+	} else {
+		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
+	}
+
+	return nil
+}
+
 func manifestComparisonReportString(comparison *ManifestComparison) string {
 	return pathSection("Added", comparison.AddedPaths) +
 		pathSection("Deleted", comparison.DeletedPaths) +
@@ -274,12 +311,15 @@ func main() {
 	generate := Generate{logger: logger}
 	validate := Validate{logger: logger}
 	compare := Compare{logger: logger}
+	compareLatestManifests := CompareLatestManifests{logger: logger}
 	var err error
 	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
 	check(err)
 	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &validate)
 	check(err)
 	_, err = parser.AddCommand("compare", "Compare manifests", "Compare manifests for two directories", &compare)
+	check(err)
+	_, err = parser.AddCommand("compare-latest-manifests", "Compare latest manifests", "Compare latest manifests for two directories", &compareLatestManifests)
 	check(err)
 	parser.Parse()
 }
