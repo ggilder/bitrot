@@ -1,2 +1,3 @@
 # Ignore code coverage output
 /coverage.out
+/bitrot

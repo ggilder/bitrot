@@ -15,16 +15,25 @@ import (
 	"time"
 )
 
+// General helper functions
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func TestPathStringExtractsPath(t *testing.T) {
 	args := PathArguments{Path: "/foo/bar"}
-	path := pathString(args.Path)
+	path, err := pathString(args.Path)
+	check(err)
 	assert.Equal(t, "/foo/bar", path)
 }
 
 func TestPathStringIsAbsolute(t *testing.T) {
 	dir, _ := os.Getwd()
 	args := PathArguments{Path: "."}
-	path := pathString(args.Path)
+	path, err := pathString(args.Path)
+	check(err)
 	assert.Equal(t, dir, path)
 }
 
@@ -171,12 +180,14 @@ func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
 	// add another file for the new manifest
 	suite.writeTestFile("baz", helloWorldString)
 	generate.Execute([]string{})
-	manifestFile := LatestManifestFileForPath(suite.tempDir)
+	manifestFile, err := LatestManifestFileForPath(suite.tempDir)
+	check(err)
 	suite.Len(manifestFile.Manifest.Entries, 2)
 }
 
 func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPathWithNoManifest() {
-	manifestFile := LatestManifestFileForPath(suite.tempDir)
+	manifestFile, err := LatestManifestFileForPath(suite.tempDir)
+	check(err)
 	suite.Nil(manifestFile)
 }
 

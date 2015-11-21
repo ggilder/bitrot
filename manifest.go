@@ -32,12 +32,17 @@ type ManifestComparison struct {
 }
 
 // NewManifest generates a Manifest from a directory path.
-func NewManifest(path string, config *Config) *Manifest {
+func NewManifest(path string, config *Config) (*Manifest, error) {
+	entries, err := directoryChecksums(path, config)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Manifest{
 		Path:      path,
 		CreatedAt: time.Now().UTC(),
-		Entries:   directoryChecksums(path, config),
-	}
+		Entries:   entries,
+	}, nil
 }
 
 // CompareManifests generates a comparison between new and old Manifests.
@@ -50,13 +55,18 @@ func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
 
 // Private functions
 
-func generateChecksum(file string) string {
+func generateChecksum(file string) (string, error) {
 	// TODO: experiment with varying buffer to determine optimal size
 	bufferSize := 10 * 1024 * 1024 // 10MiB buffer
-	reader := newSha1Reader(file, bufferSize)
+	reader, err := newSha1Reader(file, bufferSize)
+	if err != nil {
+		return "", err
+	}
 	sum, err := reader.SHA1Sum()
-	check(err)
-	return hex.EncodeToString(sum)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(sum), nil
 }
 
 func checksumHexString(data *[]byte) string {
@@ -64,9 +74,9 @@ func checksumHexString(data *[]byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
+func directoryChecksums(path string, config *Config) (map[string]ChecksumRecord, error) {
 	records := map[string]ChecksumRecord{}
-	filepath.Walk(path, func(entryPath string, info os.FileInfo, err error) error {
+	err := filepath.Walk(path, func(entryPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -78,18 +88,27 @@ func directoryChecksums(path string, config *Config) map[string]ChecksumRecord {
 		if info.Mode().IsRegular() {
 			var relPath string
 			relPath, err = filepath.Rel(path, entryPath)
-			check(err)
+			if err != nil {
+				return err
+			}
 			// Normalize Unicode combining characters
 			relPath = norm.NFC.String(relPath)
+			checksum, err := generateChecksum(entryPath)
+			if err != nil {
+				return err
+			}
 			records[relPath] = ChecksumRecord{
-				Checksum: generateChecksum(entryPath),
+				Checksum: checksum,
 				ModTime:  info.ModTime().UTC(),
 			}
 		}
 
 		return nil
 	})
-	return records
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
 }
 
 func checkAddedPaths(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {

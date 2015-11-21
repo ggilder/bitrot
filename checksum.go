@@ -13,14 +13,16 @@ type sha1Reader struct {
 	bufferSize int
 }
 
-func newSha1Reader(path string, bufferSize int) *sha1Reader {
+func newSha1Reader(path string, bufferSize int) (*sha1Reader, error) {
 	file, err := os.Open(path)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 	return &sha1Reader{
 		hash:       sha1.New(),
 		reader:     file,
 		bufferSize: bufferSize,
-	}
+	}, nil
 }
 
 func (r *sha1Reader) SHA1Sum() ([]byte, error) {

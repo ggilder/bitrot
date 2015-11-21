@@ -16,6 +16,7 @@ func TestBufferSizeConfiguration(t *testing.T) {
 	populateTestDirectory(tempDir)
 	bufferSize := 1024
 	path := writeTestFile(tempDir, "foo", helloWorldString)
-	reader := newSha1Reader(path, bufferSize)
+	reader, err := newSha1Reader(path, bufferSize)
+	check(err)
 	assert.Equal(t, 1024, reader.bufferSize)
 }

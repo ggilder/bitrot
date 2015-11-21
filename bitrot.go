@@ -70,7 +70,7 @@ type ManifestFile struct {
 }
 
 // TODO break this func down a bit and unit test?
-func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
+func NewManifestFile(manifest *Manifest, pretty bool) (*ManifestFile, error) {
 	var jsonBytes []byte
 	var err error
 	if pretty {
@@ -78,7 +78,9 @@ func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 	} else {
 		jsonBytes, err = json.Marshal(manifest)
 	}
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 	manifestName := fmt.Sprintf(
 		manifestNameTemplate,
 		manifest.CreatedAt.Format(manifestNameTimeFormat),
@@ -88,39 +90,47 @@ func NewManifestFile(manifest *Manifest, pretty bool) *ManifestFile {
 		Manifest:  manifest,
 		JSONBytes: jsonBytes,
 		Filename:  manifestName,
-	}
+	}, nil
 }
 
-func LatestManifestFileForPath(path string) *ManifestFile {
+func LatestManifestFileForPath(path string) (*ManifestFile, error) {
 	manifestDir := filepath.Join(path, manifestDirName)
 	manifestPaths, err := filepath.Glob(filepath.Join(manifestDir, manifestGlob))
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 	sort.Sort(sort.Reverse(sort.StringSlice(manifestPaths)))
 
 	if len(manifestPaths) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	manifestPath := manifestPaths[0]
 	jsonBytes, err := ioutil.ReadFile(manifestPath)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	var manifest Manifest
 	err = json.Unmarshal(jsonBytes, &manifest)
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ManifestFile{
 		Manifest:  &manifest,
 		JSONBytes: jsonBytes,
 		Filename:  manifestPath,
-	}
+	}, nil
 }
 
 // Extracts string path from wrapper and converts it to an absolute path
-func pathString(name flags.Filename) string {
+func pathString(name flags.Filename) (string, error) {
 	path, err := filepath.Abs(string(name))
-	check(err)
-	return path
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func (cmd *Generate) Execute(args []string) (err error) {
@@ -129,7 +139,10 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args, cmd.logger)
-	path := pathString(cmd.Arguments.Path)
+	path, err := pathString(cmd.Arguments.Path)
+	if err != nil {
+		return err
+	}
 
 	cmd.logger.Printf("Generating manifest for %s...\n", path)
 
@@ -137,12 +150,20 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	manifestDir := filepath.Join(path, manifestDirName)
 	// Using MkdirAll because it doesn't return an error when the path is already a directory
 	err = os.MkdirAll(manifestDir, 0755)
-	check(err)
+	if err != nil {
+		return
+	}
 
-	manifest := NewManifest(path, config)
+	manifest, err := NewManifest(path, config)
+	if err != nil {
+		return err
+	}
 
 	// Potentially validate manifest against previous
-	latestManifestFile := LatestManifestFileForPath(path)
+	latestManifestFile, err := LatestManifestFileForPath(path)
+	if err != nil {
+		return err
+	}
 	if latestManifestFile != nil {
 		ts := latestManifestFile.Manifest.CreatedAt.Format(manifestNameTimeFormat)
 		cmd.logger.Printf("Comparing to previous manifest from %s\n", ts)
@@ -151,12 +172,17 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	}
 
 	// Write new manifest
-	manifestFile := NewManifestFile(manifest, cmd.Pretty)
+	manifestFile, err := NewManifestFile(manifest, cmd.Pretty)
+	if err != nil {
+		return err
+	}
 
 	manifestPath := filepath.Join(manifestDir, manifestFile.Filename)
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
 		err = ioutil.WriteFile(manifestPath, manifestFile.JSONBytes, 0644)
-		check(err)
+		if err != nil {
+			return err
+		}
 
 		cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 	} else {
@@ -172,12 +198,22 @@ func (cmd *Validate) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args, cmd.logger)
-	path := pathString(cmd.Arguments.Path)
+	path, err := pathString(cmd.Arguments.Path)
+	if err != nil {
+		return err
+	}
 
 	cmd.logger.Printf("Validating manifest for %s...\n", path)
 
-	currentManifest := NewManifest(path, config)
-	latestManifestFile := LatestManifestFileForPath(path)
+	currentManifest, err := NewManifest(path, config)
+	if err != nil {
+		return err
+	}
+
+	latestManifestFile, err := LatestManifestFileForPath(path)
+	if err != nil {
+		return err
+	}
 
 	if latestManifestFile == nil {
 		// TODO: want to use Fatalf here but can't seem to catch it in tests
@@ -205,11 +241,25 @@ func (cmd *Compare) Execute(args []string) (err error) {
 		config.ExcludedFiles = cmd.Exclude
 	}
 	assertNoExtraArgs(&args, cmd.logger)
-	oldPath := pathString(cmd.Arguments.Old)
-	newPath := pathString(cmd.Arguments.New)
+	oldPath, err := pathString(cmd.Arguments.Old)
+	if err != nil {
+		return err
+	}
 
-	oldManifest := NewManifest(oldPath, config)
-	newManifest := NewManifest(newPath, config)
+	newPath, err := pathString(cmd.Arguments.New)
+	if err != nil {
+		return err
+	}
+
+	oldManifest, err := NewManifest(oldPath, config)
+	if err != nil {
+		return err
+	}
+
+	newManifest, err := NewManifest(newPath, config)
+	if err != nil {
+		return err
+	}
 
 	comparison := CompareManifests(oldManifest, newManifest)
 	cmd.logger.Printf(manifestComparisonReportString(comparison))
@@ -227,11 +277,25 @@ func (cmd *Compare) Execute(args []string) (err error) {
 
 func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 	assertNoExtraArgs(&args, cmd.logger)
-	oldPath := pathString(cmd.Arguments.Old)
-	newPath := pathString(cmd.Arguments.New)
+	oldPath, err := pathString(cmd.Arguments.Old)
+	if err != nil {
+		return err
+	}
 
-	oldManifest := LatestManifestFileForPath(oldPath)
-	newManifest := LatestManifestFileForPath(newPath)
+	newPath, err := pathString(cmd.Arguments.New)
+	if err != nil {
+		return err
+	}
+
+	oldManifest, err := LatestManifestFileForPath(oldPath)
+	if err != nil {
+		return err
+	}
+
+	newManifest, err := LatestManifestFileForPath(newPath)
+	if err != nil {
+		return err
+	}
 
 	if oldManifest == nil {
 		cmd.logger.Printf("No existing manifest for %s\n", oldPath)
@@ -291,10 +355,10 @@ func shortChecksum(data *[]byte) string {
 	return hex.EncodeToString(checksumBytes[:])
 }
 
-// General helper functions
-func check(e error) {
-	if e != nil {
-		panic(e)
+func addCommand(parser *flags.Parser, name, summary, description string, command interface{}) {
+	_, err := parser.AddCommand(name, summary, description, command)
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -307,19 +371,34 @@ func main() {
 		log.Printf("%s version %s\n", name, version)
 		os.Exit(0)
 	}
-	var parser = flags.NewParser(&AppOpts, flags.Default)
-	generate := Generate{logger: logger}
-	validate := Validate{logger: logger}
-	compare := Compare{logger: logger}
-	compareLatestManifests := CompareLatestManifests{logger: logger}
-	var err error
-	_, err = parser.AddCommand("generate", "Generate manifest", "Generate manifest for directory", &generate)
-	check(err)
-	_, err = parser.AddCommand("validate", "Validate manifest", "Validate manifest for directory", &validate)
-	check(err)
-	_, err = parser.AddCommand("compare", "Compare manifests", "Compare manifests for two directories", &compare)
-	check(err)
-	_, err = parser.AddCommand("compare-latest-manifests", "Compare latest manifests", "Compare latest manifests for two directories", &compareLatestManifests)
-	check(err)
+	parser := flags.NewParser(&AppOpts, flags.Default)
+	addCommand(
+		parser,
+		"generate",
+		"Generate manifest",
+		"Generate manifest for directory",
+		Generate{logger: logger},
+	)
+	addCommand(
+		parser,
+		"validate",
+		"Validate manifest",
+		"Validate manifest for directory",
+		Validate{logger: logger},
+	)
+	addCommand(
+		parser,
+		"compare",
+		"Compare manifests",
+		"Compare manifests for two directories",
+		Compare{logger: logger},
+	)
+	addCommand(
+		parser,
+		"compare-latest-manifests",
+		"Compare latest manifests",
+		"Compare latest manifests for two directories",
+		CompareLatestManifests{logger: logger},
+	)
 	parser.Parse()
 }
