@@ -377,28 +377,28 @@ func main() {
 		"generate",
 		"Generate manifest",
 		"Generate manifest for directory",
-		Generate{logger: logger},
+		&Generate{logger: logger},
 	)
 	addCommand(
 		parser,
 		"validate",
 		"Validate manifest",
 		"Validate manifest for directory",
-		Validate{logger: logger},
+		&Validate{logger: logger},
 	)
 	addCommand(
 		parser,
 		"compare",
 		"Compare manifests",
 		"Compare manifests for two directories",
-		Compare{logger: logger},
+		&Compare{logger: logger},
 	)
 	addCommand(
 		parser,
 		"compare-latest-manifests",
 		"Compare latest manifests",
 		"Compare latest manifests for two directories",
-		CompareLatestManifests{logger: logger},
+		&CompareLatestManifests{logger: logger},
 	)
 	parser.Parse()
 }
