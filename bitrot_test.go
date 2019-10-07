@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/jessevdk/go-flags"
+	"github.com/mitchellh/go-homedir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 )
 
 // General helper functions
+// TODO replace this with assert.Nil
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -40,20 +42,26 @@ func TestPathStringIsAbsolute(t *testing.T) {
 type CommandsIntegrationTestSuite struct {
 	suite.Suite
 	tempDir   string
+	homeDir   string
 	logger    *log.Logger
 	logBuffer bytes.Buffer
 }
 
 func (suite *CommandsIntegrationTestSuite) SetupTest() {
 	var err error
+	homedir.DisableCache = true
 	suite.tempDir, err = ioutil.TempDir("", "checksum")
+	check(err)
+	suite.homeDir, err = ioutil.TempDir("", "home")
 	check(err)
 	suite.clearLog()
 	suite.logger = log.New(&suite.logBuffer, "", 0)
+	os.Setenv("HOME", suite.homeDir)
 }
 
 func (suite *CommandsIntegrationTestSuite) TearDownTest() {
 	os.RemoveAll(suite.tempDir)
+	os.RemoveAll(suite.homeDir)
 }
 
 func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
@@ -119,10 +127,10 @@ func (suite *CommandsIntegrationTestSuite) clearLog() {
 	suite.logBuffer.Reset()
 }
 
-func (suite *CommandsIntegrationTestSuite) generateCommand() *Generate {
+func (suite *CommandsIntegrationTestSuite) generateCommand(dir string) *Generate {
 	return &Generate{
 		Arguments: PathArguments{
-			Path: flags.Filename(suite.tempDir),
+			Path: flags.Filename(dir),
 		},
 		logger: suite.logger,
 	}
@@ -161,56 +169,26 @@ func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
 	suite.Contains(suite.logBuffer.String(), text)
 }
 
-func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPath() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-	generate := suite.generateCommand()
-	generate.Execute([]string{})
-	manifestPaths, err := filepath.Glob(filepath.Join(suite.tempDir, manifestDirName, manifestGlob))
-	check(err)
-	manifestPath := manifestPaths[0]
-
-	// fake an older manifest
-	oldManifestName := fmt.Sprintf(
-		manifestNameTemplate,
-		time.Now().Add(-10*time.Second).Format(manifestNameTimeFormat),
-		"zzzzzzz",
-	)
-	check(os.Rename(manifestPath, filepath.Join(filepath.Dir(manifestPath), oldManifestName)))
-
-	// add another file for the new manifest
-	suite.writeTestFile("baz", helloWorldString)
-	generate.Execute([]string{})
-	manifestFile, err := LatestManifestFileForPath(suite.tempDir)
-	check(err)
-	suite.Len(manifestFile.Manifest.Entries, 2)
-}
-
-func (suite *CommandsIntegrationTestSuite) TestLatestManifestFileForPathWithNoManifest() {
-	manifestFile, err := LatestManifestFileForPath(suite.tempDir)
-	check(err)
-	suite.Nil(manifestFile)
-}
-
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	suite.generateCommand().Execute([]string{})
-	suite.LogContains(fmt.Sprintf("Wrote manifest to %s", suite.tempDir))
+	suite.generateCommand(suite.tempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Wrote manifest"))
 }
 
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifest() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.clearLog()
 
 	// Get SHA & date from manifest
-	manifestPaths, err := filepath.Glob(filepath.Join(suite.tempDir, manifestDirName, manifestGlob))
+	manifestPaths, err := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
 	check(err)
 	manifestPath := manifestPaths[0]
 	re := regexp.MustCompile("manifest-([^-]+)-([^.]+).json$")
 	matches := re.FindAllStringSubmatch(manifestPath, -1)
 	ts := matches[0][1]
 
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts))
 	suite.LogContains("Added paths: none")
 	suite.LogContains("Deleted paths: none")
@@ -223,7 +201,7 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	suite.writeTestFile("foo/modified", helloWorldString)
 	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.clearLog()
 
 	suite.writeTestFile("foo/added", helloWorldString)
@@ -231,7 +209,7 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	suite.corruptTestFile("foo/flagged")
 	suite.deleteTestFile("foo/deleted")
 
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.LogContains("Added paths:\n    foo/added")
 	suite.LogContains("Deleted paths:\n    foo/deleted")
 	suite.LogContains("Modified paths:\n    foo/modified")
@@ -240,7 +218,7 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
 	suite.LogContains(fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
@@ -248,7 +226,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.corruptTestFile("foo/bar")
 	suite.clearLog()
 	suite.validateCommand().Execute([]string{})
@@ -291,23 +269,18 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	oldTempDir := suite.copyTempDir()
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(oldTempDir).Execute([]string{})
 	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifestsMissingManifest() {
 	oldTempDir := suite.copyTempDir()
-	suite.generateCommand().Execute([]string{})
+	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
 	suite.LogContains(fmt.Sprintf("No existing manifest for %s\n", oldTempDir))
-
-	err := os.Rename(filepath.Join(suite.tempDir, ".bitrot"), filepath.Join(oldTempDir, ".bitrot"))
-	check(err)
-	suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
-	suite.LogContains(fmt.Sprintf("No existing manifest for %s\n", suite.tempDir))
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {
