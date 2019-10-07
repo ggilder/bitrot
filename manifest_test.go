@@ -178,6 +178,7 @@ func TestManifestComparison(t *testing.T) {
 			"modified":           {Checksum: "qwer", ModTime: oldModTime},
 			"touched":            {Checksum: "olkm", ModTime: oldModTime},
 			"deleted":            {Checksum: "jklh", ModTime: oldModTime},
+			"renamedOld":         {Checksum: "xxxx", ModTime: oldModTime},
 		},
 	}
 
@@ -190,6 +191,7 @@ func TestManifestComparison(t *testing.T) {
 			"modified":           {Checksum: "tyui", ModTime: newModTime},
 			"touched":            {Checksum: "olkm", ModTime: newModTime},
 			"added":              {Checksum: "bnmv", ModTime: newModTime},
+			"renamedNew":         {Checksum: "xxxx", ModTime: oldModTime},
 		},
 	}
 
@@ -213,5 +215,10 @@ func TestManifestComparison(t *testing.T) {
 	expectedAddedPaths := []string{"added"}
 	if !reflect.DeepEqual(comparison.AddedPaths, expectedAddedPaths) {
 		t.Fatalf("expected AddedPaths %v; got %v", expectedAddedPaths, comparison.AddedPaths)
+	}
+
+	expectedRenamedPaths := []RenamedPath{{OldPath: "renamedOld", NewPath: "renamedNew"}}
+	if !reflect.DeepEqual(comparison.RenamedPaths, expectedRenamedPaths) {
+		t.Fatalf("expected RenamedPaths %v; got %v", expectedRenamedPaths, comparison.RenamedPaths)
 	}
 }

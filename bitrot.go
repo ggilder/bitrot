@@ -243,6 +243,7 @@ func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 func manifestComparisonReportString(comparison *ManifestComparison) string {
 	return pathSection("Added", comparison.AddedPaths) +
 		pathSection("Deleted", comparison.DeletedPaths) +
+		renameSection(comparison.RenamedPaths) +
 		pathSection("Modified", comparison.ModifiedPaths) +
 		pathSection("Flagged", comparison.FlaggedPaths)
 }
@@ -257,6 +258,20 @@ func pathSection(description string, paths []string) string {
 		}
 	} else {
 		s += fmt.Sprintf("%s paths: none.\n", description)
+	}
+	return s
+}
+
+func renameSection(entries []RenamedPath) string {
+	s := ""
+	count := len(entries)
+	if count > 0 {
+		s += fmt.Sprint("Renamed paths:\n")
+		for _, entry := range entries {
+			s += fmt.Sprintf("    %s -> %s\n", entry.OldPath, entry.NewPath)
+		}
+	} else {
+		s += fmt.Sprint("Renamed paths: none.\n")
 	}
 	return s
 }

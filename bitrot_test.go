@@ -198,14 +198,14 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifestFailure() {
 	suite.writeTestFile("foo/flagged", helloWorldString)
-	suite.writeTestFile("foo/modified", helloWorldString)
+	suite.writeTestFile("foo/modified", "to modify")
 	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
 	suite.generateCommand(suite.tempDir).Execute([]string{})
 	suite.clearLog()
 
-	suite.writeTestFile("foo/added", helloWorldString)
-	suite.writeTestFile("foo/modified", "")
+	suite.writeTestFile("foo/added", "added")
+	suite.writeTestFile("foo/modified", "modified")
 	suite.corruptTestFile("foo/flagged")
 	suite.deleteTestFile("foo/deleted")
 
@@ -248,14 +248,14 @@ func (suite *CommandsIntegrationTestSuite) TestCompare() {
 
 func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 	suite.writeTestFile("foo/flagged", helloWorldString)
-	suite.writeTestFile("foo/modified", helloWorldString)
+	suite.writeTestFile("foo/modified", "to modify")
 	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
 	oldTempDir := suite.copyTempDir()
 
 	// make modifications
-	suite.writeTestFile("foo/added", helloWorldString)
-	suite.writeTestFile("foo/modified", "")
+	suite.writeTestFile("foo/added", "added")
+	suite.writeTestFile("foo/modified", "modified")
 	suite.corruptTestFile("foo/flagged")
 	suite.deleteTestFile("foo/deleted")
 
@@ -265,6 +265,27 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 	suite.LogContains("Deleted paths:\n    foo/deleted")
 	suite.LogContains("Modified paths:\n    foo/modified")
 	suite.LogContains("Flagged paths:\n    foo/flagged")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
+	timestamp := time.Now()
+	suite.writeTestFile("foo/testfile", helloWorldString)
+	check(suite.backdateTestFile("foo/testfile", timestamp))
+	suite.writeTestFile("foo/deleted", "deleted")
+	oldTempDir := suite.copyTempDir()
+
+	// make modifications
+	suite.writeTestFile("foo/added", "added")
+	suite.writeTestFile("foo/testfile2", helloWorldString)
+	check(suite.backdateTestFile("foo/testfile2", timestamp))
+	suite.deleteTestFile("foo/deleted")
+	suite.deleteTestFile("foo/testfile")
+
+	suite.compareCommand(oldTempDir).Execute([]string{})
+	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
+	suite.LogContains("Added paths:\n    foo/added")
+	suite.LogContains("Deleted paths:\n    foo/deleted")
+	suite.LogContains("Renamed paths:\n    foo/testfile -> foo/testfile2")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {
