@@ -290,7 +290,7 @@ func addCommand(parser *flags.Parser, name, summary, description string, command
 }
 
 func main() {
-	logger := log.New(os.Stderr, "", 0)
+	logger := log.New(os.Stdout, "", 0)
 	var AppOpts struct {
 		Version func() `long:"version" short:"v"`
 	}
