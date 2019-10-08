@@ -130,9 +130,8 @@ func (cmd *Validate) Execute(args []string) (err error) {
 	}
 
 	if latestManifest == nil {
-		// TODO: want to use Fatalf here but can't seem to catch it in tests
-		cmd.logger.Printf("No previous manifest to validate for %s.\n", path)
-		return nil
+		cmd.logger.Printf("No previous manifest to validate for %s.", path)
+		return fmt.Errorf("")
 	}
 
 	comparison := CompareManifests(latestManifest, currentManifest)
@@ -140,8 +139,8 @@ func (cmd *Validate) Execute(args []string) (err error) {
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
-		// TODO: want to use Fatalf here but can't seem to catch it in tests
-		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
+		return fmt.Errorf("")
 	} else {
 		cmd.logger.Printf("Validated manifest for %s.\n", path)
 	}
@@ -180,8 +179,8 @@ func (cmd *Compare) Execute(args []string) (err error) {
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
-		// TODO: want to use Fatalf here but can't seem to catch it in tests
-		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
+		return fmt.Errorf("")
 	} else {
 		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
 	}
@@ -231,8 +230,8 @@ func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
-		// TODO: want to use Fatalf here but can't seem to catch it in tests
-		cmd.logger.Printf("%d files flagged for possible corruption.\n", flagged)
+		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
+		return fmt.Errorf("")
 	} else {
 		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
 	}
@@ -295,10 +294,10 @@ func main() {
 		Version func() `long:"version" short:"v"`
 	}
 	AppOpts.Version = func() {
-		log.Printf("%s version %s\n", name, version)
+		logger.Printf("%s version %s\n", name, version)
 		os.Exit(0)
 	}
-	parser := flags.NewParser(&AppOpts, flags.Default)
+	parser := flags.NewParser(&AppOpts, flags.HelpFlag|flags.PassDoubleDash)
 	addCommand(
 		parser,
 		"generate",
@@ -327,5 +326,12 @@ func main() {
 		"Compare latest manifests for two directories",
 		&CompareLatestManifests{logger: logger},
 	)
-	parser.Parse()
+	_, err := parser.Parse()
+	if err != nil {
+		// Ignore the "signal" errors produced by commands (which print their own error messages)
+		if err.Error() != "" {
+			logger.Println(err)
+		}
+		os.Exit(1)
+	}
 }
