@@ -40,6 +40,11 @@ func TestManifestComparison(t *testing.T) {
 
 	comparison := CompareManifests(&oldManifest, &newManifest)
 
+	expectedUnchangedPaths := []string{"not_changed", "touched"}
+	if !reflect.DeepEqual(comparison.UnchangedPaths, expectedUnchangedPaths) {
+		t.Fatalf("expected UnchangedPaths %v; got %v", expectedUnchangedPaths, comparison.UnchangedPaths)
+	}
+
 	expectedDeletedPaths := []string{"deleted"}
 	if !reflect.DeepEqual(comparison.DeletedPaths, expectedDeletedPaths) {
 		t.Fatalf("expected DeletedPaths %v; got %v", expectedDeletedPaths, comparison.DeletedPaths)

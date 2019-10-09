@@ -4,14 +4,15 @@ package main
 // added, renamed, modified, or flagged for suspicious checksum changes
 // (indicating possible corruption).
 type ManifestComparison struct {
-	DeletedPaths  []string
-	AddedPaths    []string
-	RenamedPaths  []RenamedPath
-	ModifiedPaths []string
-	FlaggedPaths  []string
-	oldManifest   *Manifest
-	newManifest   *Manifest
-	complete      bool
+	UnchangedPaths []string
+	DeletedPaths   []string
+	AddedPaths     []string
+	RenamedPaths   []RenamedPath
+	ModifiedPaths  []string
+	FlaggedPaths   []string
+	oldManifest    *Manifest
+	newManifest    *Manifest
+	complete       bool
 }
 
 // RenamedPath tracks a path that has been moved/renamed but has the same
@@ -68,14 +69,17 @@ func (comp *ManifestComparison) handleEntry(path string, oldEntry *ChecksumRecor
 		return false
 	}
 
-	if newEntry.Checksum != oldEntry.Checksum {
+	if newEntry.Checksum == oldEntry.Checksum {
+		comp.UnchangedPaths = append(comp.UnchangedPaths, path)
+	} else {
 		if newEntry.ModTime != oldEntry.ModTime {
+			// Content change plus mod time change = intended modification
 			comp.ModifiedPaths = append(comp.ModifiedPaths, path)
 		} else {
+			// Content change with no mod time change = possible corruption
 			comp.FlaggedPaths = append(comp.FlaggedPaths, path)
 		}
 	}
-	// TODO this is where we should flag a path as unchanged
 
 	return true
 }

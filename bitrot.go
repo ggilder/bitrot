@@ -239,10 +239,12 @@ func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 	return nil
 }
 
+// TODO refactor and move comparison report printing stuff
 func manifestComparisonReportString(comparison *ManifestComparison) string {
-	return pathSection("Added", comparison.AddedPaths) +
+	return unchangedSection(len(comparison.UnchangedPaths)) +
+		pathSection("Added", comparison.AddedPaths) +
 		pathSection("Deleted", comparison.DeletedPaths) +
-		renameSection(comparison.RenamedPaths) +
+		renamedSection(comparison.RenamedPaths) +
 		pathSection("Modified", comparison.ModifiedPaths) +
 		pathSection("Flagged", comparison.FlaggedPaths)
 }
@@ -261,7 +263,11 @@ func pathSection(description string, paths []string) string {
 	return s
 }
 
-func renameSection(entries []RenamedPath) string {
+func unchangedSection(count int) string {
+	return fmt.Sprintf("Unchanged paths: %d\n", count)
+}
+
+func renamedSection(entries []RenamedPath) string {
 	s := ""
 	count := len(entries)
 	if count > 0 {
