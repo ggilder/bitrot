@@ -55,7 +55,7 @@ func TestDirectoryManifest(t *testing.T) {
 		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
 	}
 
-	if math.Abs(float64(manifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 0 {
+	if math.Abs(float64(manifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 5 {
 		t.Fatalf("expected manifest createdAt within 5s of %v, got %v", expectedCreationTime, manifest.CreatedAt)
 	}
 
@@ -143,8 +143,8 @@ func TestManifestJSON(t *testing.T) {
 		t.Fatalf("expected JSON path %s, got %s", tempDir, recreatedManifest.Path)
 	}
 
-	if math.Abs(float64(recreatedManifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 0 {
-		t.Fatalf("expected manifest created_at within 0s of %v, got %v", expectedCreationTime, recreatedManifest.CreatedAt)
+	if math.Abs(float64(recreatedManifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 5 {
+		t.Fatalf("expected manifest created_at within 5s of %v, got %v", expectedCreationTime, recreatedManifest.CreatedAt)
 	}
 
 	entries := recreatedManifest.Entries
