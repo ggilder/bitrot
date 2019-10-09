@@ -266,6 +266,7 @@ func (suite *CommandsIntegrationTestSuite) TestCompare() {
 	err := suite.compareCommand(oldTempDir).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
+	suite.LogContains("Unchanged paths: 1\n")
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
 }
 
@@ -286,6 +287,7 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 	assert.NotNil(suite.T(), err)
 
 	suite.LogContains("1 files flagged for possible corruption.")
+	suite.LogContains("Unchanged paths: 0\n")
 	suite.LogContains("Added paths:\n    foo/added")
 	suite.LogContains("Deleted paths:\n    foo/deleted")
 	suite.LogContains("Modified paths:\n    foo/modified")
@@ -310,6 +312,7 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
 	assert.Nil(suite.T(), err)
 
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
+	suite.LogContains("Unchanged paths: 0\n")
 	suite.LogContains("Added paths:\n    foo/added")
 	suite.LogContains("Deleted paths:\n    foo/deleted")
 	suite.LogContains("Renamed paths:\n    foo/testfile -> foo/testfile2")
@@ -328,6 +331,7 @@ func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {
 	assert.Nil(suite.T(), err)
 
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
+	suite.LogContains("Unchanged paths: 1\n")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifestsMissingManifest() {
