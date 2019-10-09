@@ -1,12 +1,12 @@
 package main
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// TODO refactor tests to use testify/assert library like `bitrot_test.go`
 func TestManifestComparison(t *testing.T) {
 	newCreatedAt := time.Now()
 	newModTime := time.Now()
@@ -40,33 +40,10 @@ func TestManifestComparison(t *testing.T) {
 
 	comparison := CompareManifests(&oldManifest, &newManifest)
 
-	expectedUnchangedPaths := []string{"not_changed", "touched"}
-	if !reflect.DeepEqual(comparison.UnchangedPaths, expectedUnchangedPaths) {
-		t.Fatalf("expected UnchangedPaths %v; got %v", expectedUnchangedPaths, comparison.UnchangedPaths)
-	}
-
-	expectedDeletedPaths := []string{"deleted"}
-	if !reflect.DeepEqual(comparison.DeletedPaths, expectedDeletedPaths) {
-		t.Fatalf("expected DeletedPaths %v; got %v", expectedDeletedPaths, comparison.DeletedPaths)
-	}
-
-	expectedModifiedPaths := []string{"modified"}
-	if !reflect.DeepEqual(comparison.ModifiedPaths, expectedModifiedPaths) {
-		t.Fatalf("expected ModifiedPaths %v; got %v", expectedModifiedPaths, comparison.ModifiedPaths)
-	}
-
-	expectedFlaggedPaths := []string{"silently_corrupted"}
-	if !reflect.DeepEqual(comparison.FlaggedPaths, expectedFlaggedPaths) {
-		t.Fatalf("expected FlaggedPaths %v; got %v", expectedFlaggedPaths, comparison.FlaggedPaths)
-	}
-
-	expectedAddedPaths := []string{"added"}
-	if !reflect.DeepEqual(comparison.AddedPaths, expectedAddedPaths) {
-		t.Fatalf("expected AddedPaths %v; got %v", expectedAddedPaths, comparison.AddedPaths)
-	}
-
-	expectedRenamedPaths := []RenamedPath{{OldPath: "renamedOld", NewPath: "renamedNew"}}
-	if !reflect.DeepEqual(comparison.RenamedPaths, expectedRenamedPaths) {
-		t.Fatalf("expected RenamedPaths %v; got %v", expectedRenamedPaths, comparison.RenamedPaths)
-	}
+	assert.ElementsMatch(t, comparison.UnchangedPaths, []string{"not_changed", "touched"})
+	assert.ElementsMatch(t, comparison.DeletedPaths, []string{"deleted"})
+	assert.ElementsMatch(t, comparison.ModifiedPaths, []string{"modified"})
+	assert.ElementsMatch(t, comparison.FlaggedPaths, []string{"silently_corrupted"})
+	assert.ElementsMatch(t, comparison.AddedPaths, []string{"added"})
+	assert.ElementsMatch(t, comparison.RenamedPaths, []RenamedPath{{OldPath: "renamedOld", NewPath: "renamedNew"}})
 }
