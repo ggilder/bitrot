@@ -22,21 +22,6 @@ type Manifest struct {
 	Entries   map[string]ChecksumRecord `json:"entries"`
 }
 
-// ManifestComparison of two Manifests, showing paths that have been deleted,
-// added, modified, or flagged for suspicious checksum changes.
-type ManifestComparison struct {
-	DeletedPaths  []string
-	AddedPaths    []string
-	RenamedPaths  []RenamedPath
-	ModifiedPaths []string
-	FlaggedPaths  []string
-}
-
-type RenamedPath struct {
-	OldPath string
-	NewPath string
-}
-
 // NewManifest generates a Manifest from a directory path.
 func NewManifest(path string, config *Config) (*Manifest, error) {
 	entries, err := directoryChecksums(path, config)
@@ -49,13 +34,6 @@ func NewManifest(path string, config *Config) (*Manifest, error) {
 		CreatedAt: time.Now().UTC(),
 		Entries:   entries,
 	}, nil
-}
-
-// CompareManifests generates a comparison between new and old Manifests.
-func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
-	comparison := &ManifestComparison{}
-	compare(oldManifest, newManifest, comparison)
-	return comparison
 }
 
 // Private functions
@@ -114,52 +92,4 @@ func directoryChecksums(path string, config *Config) (map[string]ChecksumRecord,
 		return nil, err
 	}
 	return records, nil
-}
-
-func compare(oldManifest, newManifest *Manifest, comparison *ManifestComparison) {
-	// First look for paths added in new
-	for path := range newManifest.Entries {
-		_, oldEntryPresent := oldManifest.Entries[path]
-		if !oldEntryPresent {
-			comparison.AddedPaths = append(comparison.AddedPaths, path)
-		}
-	}
-	// Then look for modifications, deletions, renames, or corruptions of files from old to new
-	for path, oldEntry := range oldManifest.Entries {
-		newEntry, newEntryPresent := newManifest.Entries[path]
-		if newEntryPresent {
-			checkModifiedPath(path, &oldEntry, &newEntry, comparison)
-		} else if newPath := checkRenamedPath(&oldEntry, newManifest, comparison); newPath != "" {
-			comparison.RenamedPaths = append(comparison.RenamedPaths, RenamedPath{OldPath: path, NewPath: newPath})
-			// Remove from added paths
-			for idx, path := range comparison.AddedPaths {
-				if path == newPath {
-					comparison.AddedPaths = append(comparison.AddedPaths[:idx], comparison.AddedPaths[idx+1:]...)
-					break
-				}
-			}
-		} else {
-			comparison.DeletedPaths = append(comparison.DeletedPaths, path)
-		}
-	}
-}
-
-func checkModifiedPath(path string, oldEntry, newEntry *ChecksumRecord, comparison *ManifestComparison) {
-	if newEntry.Checksum != oldEntry.Checksum {
-		if newEntry.ModTime != oldEntry.ModTime {
-			comparison.ModifiedPaths = append(comparison.ModifiedPaths, path)
-		} else {
-			comparison.FlaggedPaths = append(comparison.FlaggedPaths, path)
-		}
-	}
-	// TODO this is where we should flag a path as unchanged
-}
-
-func checkRenamedPath(oldEntry *ChecksumRecord, newManifest *Manifest, comparison *ManifestComparison) string {
-	for _, newPath := range comparison.AddedPaths {
-		if newManifest.Entries[newPath].Checksum == oldEntry.Checksum {
-			return newPath
-		}
-	}
-	return ""
 }
