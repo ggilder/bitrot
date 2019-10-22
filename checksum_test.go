@@ -1,22 +1,23 @@
 package main
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBufferSizeConfiguration(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	populateTestDirectory(tempDir)
+	populateTestDirectory(t, tempDir)
 	bufferSize := 1024
-	path := writeTestFile(tempDir, "foo", helloWorldString)
+	path := writeTestFile(t, tempDir, "foo", helloWorldString)
 	reader, err := newSha1Reader(path, bufferSize)
-	check(err)
+	assert.Nil(t, err)
 	assert.Equal(t, 1024, reader.bufferSize)
 }

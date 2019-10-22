@@ -1,12 +1,12 @@
 package main
 
 import (
-	// "fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 /*
