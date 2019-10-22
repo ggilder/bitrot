@@ -90,7 +90,8 @@ func (cmd *Generate) Execute(args []string) (err error) {
 		ts := latestManifest.CreatedAt.Format(manifestNameTimeFormat)
 		cmd.logger.Printf("Comparing to previous manifest from %s\n", ts)
 		comparison := CompareManifests(latestManifest, manifest)
-		cmd.logger.Printf(manifestComparisonReportString(comparison))
+		report := NewComparisonReport(comparison)
+		cmd.logger.Printf(report.ReportString())
 	}
 
 	// Write new manifest
@@ -135,7 +136,8 @@ func (cmd *Validate) Execute(args []string) (err error) {
 	}
 
 	comparison := CompareManifests(latestManifest, currentManifest)
-	cmd.logger.Printf(manifestComparisonReportString(comparison))
+	report := NewComparisonReport(comparison)
+	cmd.logger.Printf(report.ReportString())
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
@@ -175,7 +177,8 @@ func (cmd *Compare) Execute(args []string) (err error) {
 	}
 
 	comparison := CompareManifests(oldManifest, newManifest)
-	cmd.logger.Printf(manifestComparisonReportString(comparison))
+	report := NewComparisonReport(comparison)
+	cmd.logger.Printf(report.ReportString())
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
@@ -226,7 +229,8 @@ func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 	}
 
 	comparison := CompareManifests(oldManifest, newManifest)
-	cmd.logger.Printf(manifestComparisonReportString(comparison))
+	report := NewComparisonReport(comparison)
+	cmd.logger.Printf(report.ReportString())
 
 	flagged := len(comparison.FlaggedPaths)
 	if flagged > 0 {
@@ -237,48 +241,6 @@ func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
 	}
 
 	return nil
-}
-
-// TODO refactor and move comparison report printing stuff
-func manifestComparisonReportString(comparison *ManifestComparison) string {
-	return unchangedSection(len(comparison.UnchangedPaths)) +
-		pathSection("Added", comparison.AddedPaths) +
-		pathSection("Deleted", comparison.DeletedPaths) +
-		renamedSection(comparison.RenamedPaths) +
-		pathSection("Modified", comparison.ModifiedPaths) +
-		pathSection("Flagged", comparison.FlaggedPaths)
-}
-
-func pathSection(description string, paths []string) string {
-	s := ""
-	count := len(paths)
-	if count > 0 {
-		s += fmt.Sprintf("%s paths:\n", description)
-		for _, path := range paths {
-			s += fmt.Sprintf("    %s\n", path)
-		}
-	} else {
-		s += fmt.Sprintf("%s paths: none.\n", description)
-	}
-	return s
-}
-
-func unchangedSection(count int) string {
-	return fmt.Sprintf("Unchanged paths: %d\n", count)
-}
-
-func renamedSection(entries []RenamedPath) string {
-	s := ""
-	count := len(entries)
-	if count > 0 {
-		s += fmt.Sprint("Renamed paths:\n")
-		for _, entry := range entries {
-			s += fmt.Sprintf("    %s -> %s\n", entry.OldPath, entry.NewPath)
-		}
-	} else {
-		s += fmt.Sprint("Renamed paths: none.\n")
-	}
-	return s
 }
 
 func assertNoExtraArgs(args *[]string, logger *log.Logger) {
