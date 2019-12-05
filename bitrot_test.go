@@ -191,10 +191,10 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	assert.Nil(suite.T(), err)
 
 	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts))
-	suite.LogContains("Added paths: none")
-	suite.LogContains("Deleted paths: none")
-	suite.LogContains("Modified paths: none")
-	suite.LogContains("Flagged paths: none")
+	suite.LogContains("Added paths: 0")
+	suite.LogContains("Deleted paths: 0")
+	suite.LogContains("Modified paths: 0")
+	suite.LogContains("Flagged paths: 0")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifestFailure() {
@@ -215,10 +215,10 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	err = suite.generateCommand(suite.tempDir).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Modified paths:\n    foo/modified")
-	suite.LogContains("Flagged paths:\n    foo/flagged")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Modified paths: 1\n    foo/modified")
+	suite.LogContains("Flagged paths: 1\n    foo/flagged")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
@@ -244,7 +244,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	err = suite.validateCommand().Execute([]string{})
 	assert.NotNil(suite.T(), err)
 
-	suite.LogContains("Flagged paths:\n    foo/bar\n")
+	suite.LogContains("Flagged paths: 1\n    foo/bar\n")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
@@ -283,10 +283,10 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 
 	suite.LogContains("1 files flagged for possible corruption.")
 	suite.LogContains("Unchanged paths: 0\n")
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Modified paths:\n    foo/modified")
-	suite.LogContains("Flagged paths:\n    foo/flagged")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Modified paths: 1\n    foo/modified")
+	suite.LogContains("Flagged paths: 1\n    foo/flagged")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
@@ -308,9 +308,9 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
 
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
 	suite.LogContains("Unchanged paths: 0\n")
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Renamed paths:\n    foo/testfile -> foo/testfile2")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Renamed paths: 1\n    foo/testfile -> foo/testfile2")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {

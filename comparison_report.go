@@ -26,13 +26,9 @@ func (report *ComparisonReport) ReportString() string {
 func (report *ComparisonReport) pathSection(description string, paths []string) string {
 	s := ""
 	count := len(paths)
-	if count > 0 {
-		s += fmt.Sprintf("%s paths:\n", description)
-		for _, path := range paths {
-			s += fmt.Sprintf("    %s\n", path)
-		}
-	} else {
-		s += fmt.Sprintf("%s paths: none.\n", description)
+	s += fmt.Sprintf("%s paths: %d\n", description, count)
+	for _, path := range paths {
+		s += fmt.Sprintf("    %s\n", path)
 	}
 	return s
 }
@@ -46,13 +42,9 @@ func (report *ComparisonReport) renamedSection() string {
 	entries := report.mc.RenamedPaths
 	s := ""
 	count := len(entries)
-	if count > 0 {
-		s += fmt.Sprint("Renamed paths:\n")
-		for _, entry := range entries {
-			s += fmt.Sprintf("    %s -> %s\n", entry.OldPath, entry.NewPath)
-		}
-	} else {
-		s += fmt.Sprint("Renamed paths: none.\n")
+	s += fmt.Sprintf("Renamed paths: %d\n", count)
+	for _, entry := range entries {
+		s += fmt.Sprintf("    %s -> %s\n", entry.OldPath, entry.NewPath)
 	}
 	return s
 }
