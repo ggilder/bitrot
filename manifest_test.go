@@ -11,23 +11,25 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var helloWorldString = "hello! world\n"
 var helloWorldChecksum = "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
 
-func writeTestFile(dir, name, content string) string {
+func writeTestFile(t *testing.T, dir, name, content string) string {
 	testFile := filepath.Join(dir, name)
 	err := ioutil.WriteFile(testFile, []byte(content), 0644)
-	check(err)
+	assert.Nil(t, err)
 	return testFile
 }
 
-func populateTestDirectory(tempDir string) (map[string]string, time.Time) {
-	writeTestFile(tempDir, "foo", helloWorldString)
+func populateTestDirectory(t *testing.T, tempDir string) (map[string]string, time.Time) {
+	writeTestFile(t, tempDir, "foo", helloWorldString)
 	subdir := filepath.Join(tempDir, "bar", "baz", "stuff")
-	check(os.MkdirAll(subdir, 0755))
-	writeTestFile(subdir, "foo", helloWorldString)
+	assert.Nil(t, os.MkdirAll(subdir, 0755))
+	writeTestFile(t, subdir, "foo", helloWorldString)
 
 	expectedChecksums := map[string]string{
 		"bar/baz/stuff/foo": helloWorldChecksum,
@@ -41,15 +43,15 @@ func populateTestDirectory(tempDir string) (map[string]string, time.Time) {
 
 func TestDirectoryManifest(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
+	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
 
 	config := Config{}
 	manifest, err := NewManifest(tempDir, &config)
-	check(err)
+	assert.Nil(t, err)
 
 	if manifest.Path != tempDir {
 		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
@@ -77,18 +79,18 @@ func TestDirectoryManifest(t *testing.T) {
 
 func TestManifestExclusionOnFile(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	populateTestDirectory(tempDir)
+	populateTestDirectory(t, tempDir)
 
 	config := Config{
 		ExcludedFiles: []string{"foo"},
 	}
 
 	manifest, err := NewManifest(tempDir, &config)
-	check(err)
+	assert.Nil(t, err)
 
 	if !reflect.DeepEqual(manifest.Entries, map[string]ChecksumRecord{}) {
 		t.Fatalf("Entries mismatch; expected %v, got %v", map[string]ChecksumRecord{}, manifest.Entries)
@@ -97,18 +99,18 @@ func TestManifestExclusionOnFile(t *testing.T) {
 
 func TestManifestExclusionOnFolder(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	populateTestDirectory(tempDir)
+	populateTestDirectory(t, tempDir)
 
 	config := Config{
 		ExcludedFiles: []string{"baz"},
 	}
 
 	manifest, err := NewManifest(tempDir, &config)
-	check(err)
+	assert.Nil(t, err)
 
 	entryPaths := []string{}
 	for path := range manifest.Entries {
@@ -123,21 +125,21 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 
 func TestManifestJSON(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	expectedChecksums, expectedCreationTime := populateTestDirectory(tempDir)
+	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
 
 	config := Config{}
 	manifest, err := NewManifest(tempDir, &config)
-	check(err)
+	assert.Nil(t, err)
 
 	jsonBytes, err := json.Marshal(manifest)
 
 	var recreatedManifest Manifest
 	err = json.Unmarshal(jsonBytes, &recreatedManifest)
-	check(err)
+	assert.Nil(t, err)
 
 	if recreatedManifest.Path != tempDir {
 		t.Fatalf("expected JSON path %s, got %s", tempDir, recreatedManifest.Path)

@@ -3,10 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/jessevdk/go-flags"
-	"github.com/mitchellh/go-homedir"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,20 +10,19 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/jessevdk/go-flags"
+	"github.com/mitchellh/go-homedir"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 // General helper functions
-// TODO replace this with assert.Nil
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
 
 func TestPathStringExtractsPath(t *testing.T) {
 	args := PathArguments{Path: "/foo/bar"}
 	path, err := pathString(args.Path)
-	check(err)
+	assert.Nil(t, err)
 	assert.Equal(t, "/foo/bar", path)
 }
 
@@ -35,7 +30,7 @@ func TestPathStringIsAbsolute(t *testing.T) {
 	dir, _ := os.Getwd()
 	args := PathArguments{Path: "."}
 	path, err := pathString(args.Path)
-	check(err)
+	assert.Nil(t, err)
 	assert.Equal(t, dir, path)
 }
 
@@ -51,9 +46,9 @@ func (suite *CommandsIntegrationTestSuite) SetupTest() {
 	var err error
 	homedir.DisableCache = true
 	suite.tempDir, err = ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(suite.T(), err)
 	suite.homeDir, err = ioutil.TempDir("", "home")
-	check(err)
+	assert.Nil(suite.T(), err)
 	suite.clearLog()
 	suite.logger = log.New(&suite.logBuffer, "", 0)
 	os.Setenv("HOME", suite.homeDir)
@@ -66,7 +61,7 @@ func (suite *CommandsIntegrationTestSuite) TearDownTest() {
 
 func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
 	tempDirCopy, err := ioutil.TempDir("", "checksum")
-	check(err)
+	assert.Nil(suite.T(), err)
 
 	// super dumb directory copy
 	err = filepath.Walk(suite.tempDir, func(path string, fi os.FileInfo, err error) error {
@@ -76,13 +71,13 @@ func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
 
 		if fi.Mode().IsRegular() {
 			relPath, err := filepath.Rel(suite.tempDir, path)
-			check(err)
+			assert.Nil(suite.T(), err)
 			destPath := filepath.Join(tempDirCopy, relPath)
 			dir := filepath.Dir(destPath)
-			check(os.MkdirAll(dir, 0755))
+			assert.Nil(suite.T(), os.MkdirAll(dir, 0755))
 			data, err := ioutil.ReadFile(path)
-			check(err)
-			check(ioutil.WriteFile(destPath, data, 0644))
+			assert.Nil(suite.T(), err)
+			assert.Nil(suite.T(), ioutil.WriteFile(destPath, data, 0644))
 			err = os.Chtimes(destPath, fi.ModTime(), fi.ModTime())
 			if err != nil {
 				return err
@@ -96,26 +91,26 @@ func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
 func (suite *CommandsIntegrationTestSuite) writeTestFile(path, content string) {
 	testFile := filepath.Join(suite.tempDir, path)
 	dir := filepath.Dir(testFile)
-	check(os.MkdirAll(dir, 0755))
+	assert.Nil(suite.T(), os.MkdirAll(dir, 0755))
 	err := ioutil.WriteFile(testFile, []byte(content), 0644)
-	check(err)
+	assert.Nil(suite.T(), err)
 }
 
 func (suite *CommandsIntegrationTestSuite) corruptTestFile(path string) {
 	testFile := filepath.Join(suite.tempDir, path)
 	stat, err := os.Stat(testFile)
-	check(err)
+	assert.Nil(suite.T(), err)
 	contents, err := ioutil.ReadFile(testFile)
-	check(err)
+	assert.Nil(suite.T(), err)
 	contents[0] = contents[0] ^ 255
 	ioutil.WriteFile(testFile, contents, 0644)
 
-	check(suite.backdateTestFile(path, stat.ModTime()))
+	assert.Nil(suite.T(), suite.backdateTestFile(path, stat.ModTime()))
 }
 
 func (suite *CommandsIntegrationTestSuite) deleteTestFile(path string) {
 	testFile := filepath.Join(suite.tempDir, path)
-	check(os.Remove(testFile))
+	assert.Nil(suite.T(), os.Remove(testFile))
 }
 
 func (suite *CommandsIntegrationTestSuite) backdateTestFile(path string, to time.Time) error {
@@ -186,7 +181,7 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 
 	// Get SHA & date from manifest
 	manifestPaths, err := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
-	check(err)
+	assert.Nil(suite.T(), err)
 	manifestPath := manifestPaths[0]
 	re := regexp.MustCompile("manifest-([^-]+)-([^.]+).json$")
 	matches := re.FindAllStringSubmatch(manifestPath, -1)
@@ -196,16 +191,16 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	assert.Nil(suite.T(), err)
 
 	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts))
-	suite.LogContains("Added paths: none")
-	suite.LogContains("Deleted paths: none")
-	suite.LogContains("Modified paths: none")
-	suite.LogContains("Flagged paths: none")
+	suite.LogContains("Added paths: 0")
+	suite.LogContains("Deleted paths: 0")
+	suite.LogContains("Modified paths: 0")
+	suite.LogContains("Flagged paths: 0")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifestFailure() {
 	suite.writeTestFile("foo/flagged", helloWorldString)
 	suite.writeTestFile("foo/modified", "to modify")
-	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
+	assert.Nil(suite.T(), suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
 	err := suite.generateCommand(suite.tempDir).Execute([]string{})
 	assert.Nil(suite.T(), err)
@@ -220,10 +215,10 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	err = suite.generateCommand(suite.tempDir).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Modified paths:\n    foo/modified")
-	suite.LogContains("Flagged paths:\n    foo/flagged")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Modified paths: 1\n    foo/modified")
+	suite.LogContains("Flagged paths: 1\n    foo/flagged")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
@@ -249,7 +244,7 @@ func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
 	err = suite.validateCommand().Execute([]string{})
 	assert.NotNil(suite.T(), err)
 
-	suite.LogContains("Flagged paths:\n    foo/bar\n")
+	suite.LogContains("Flagged paths: 1\n    foo/bar\n")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
@@ -273,7 +268,7 @@ func (suite *CommandsIntegrationTestSuite) TestCompare() {
 func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 	suite.writeTestFile("foo/flagged", helloWorldString)
 	suite.writeTestFile("foo/modified", "to modify")
-	check(suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
+	assert.Nil(suite.T(), suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
 	oldTempDir := suite.copyTempDir()
 
@@ -288,23 +283,23 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
 
 	suite.LogContains("1 files flagged for possible corruption.")
 	suite.LogContains("Unchanged paths: 0\n")
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Modified paths:\n    foo/modified")
-	suite.LogContains("Flagged paths:\n    foo/flagged")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Modified paths: 1\n    foo/modified")
+	suite.LogContains("Flagged paths: 1\n    foo/flagged")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
 	timestamp := time.Now()
 	suite.writeTestFile("foo/testfile", helloWorldString)
-	check(suite.backdateTestFile("foo/testfile", timestamp))
+	assert.Nil(suite.T(), suite.backdateTestFile("foo/testfile", timestamp))
 	suite.writeTestFile("foo/deleted", "deleted")
 	oldTempDir := suite.copyTempDir()
 
 	// make modifications
 	suite.writeTestFile("foo/added", "added")
 	suite.writeTestFile("foo/testfile2", helloWorldString)
-	check(suite.backdateTestFile("foo/testfile2", timestamp))
+	assert.Nil(suite.T(), suite.backdateTestFile("foo/testfile2", timestamp))
 	suite.deleteTestFile("foo/deleted")
 	suite.deleteTestFile("foo/testfile")
 
@@ -313,9 +308,9 @@ func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
 
 	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
 	suite.LogContains("Unchanged paths: 0\n")
-	suite.LogContains("Added paths:\n    foo/added")
-	suite.LogContains("Deleted paths:\n    foo/deleted")
-	suite.LogContains("Renamed paths:\n    foo/testfile -> foo/testfile2")
+	suite.LogContains("Added paths: 1\n    foo/added")
+	suite.LogContains("Deleted paths: 1\n    foo/deleted")
+	suite.LogContains("Renamed paths: 1\n    foo/testfile -> foo/testfile2")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {

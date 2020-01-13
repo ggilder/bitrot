@@ -29,10 +29,22 @@ func CompareManifests(oldManifest, newManifest *Manifest) *ManifestComparison {
 	return comparison
 }
 
+func (comp *ManifestComparison) Success() bool {
+	return len(comp.FlaggedPaths) == 0
+}
+
+func (comp *ManifestComparison) TotalChecked() int {
+	return len(comp.UnchangedPaths) +
+		len(comp.DeletedPaths) +
+		len(comp.AddedPaths) +
+		len(comp.RenamedPaths) +
+		len(comp.ModifiedPaths) +
+		len(comp.FlaggedPaths)
+}
+
 func (comp *ManifestComparison) compare() {
 	// Don't rerun
 	if comp.complete {
-		// TODO test this behavior
 		return
 	}
 
