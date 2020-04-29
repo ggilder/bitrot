@@ -22,6 +22,7 @@ var defaultExcludedFiles = []string{
 	".svn",
 	// Synology filesystem metadata
 	"@eaDir",
+	"@tmp",
 	// ignore our own configuration
 	configDir,
 }
