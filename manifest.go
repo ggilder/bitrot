@@ -65,6 +65,10 @@ func directoryChecksums(path string, config *Config) (map[string]ChecksumRecord,
 		}
 
 		if config.isIgnoredPath(entryPath) {
+			if info.IsDir() {
+				// Skip walking this directory
+				return filepath.SkipDir
+			}
 			return nil
 		}
 

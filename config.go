@@ -4,7 +4,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const (
@@ -12,6 +11,7 @@ const (
 	configStorageDir = "manifests"
 )
 
+// TODO should ignored files and directories be handled separately?
 var defaultExcludedFiles = []string{
 	// Mac OS Finder metadata
 	".DS_Store",
@@ -52,12 +52,10 @@ func DefaultConfig() *Config {
 }
 
 func (c *Config) isIgnoredPath(path string) bool {
-	parts := strings.Split(path, string(filepath.Separator))
-	for _, part := range parts {
-		for _, ignoredName := range c.ExcludedFiles {
-			if part == ignoredName {
-				return true
-			}
+	base := filepath.Base(path)
+	for _, ignoredName := range c.ExcludedFiles {
+		if base == ignoredName {
+			return true
 		}
 	}
 	return false
