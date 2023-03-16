@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/mitchellh/go-homedir"
 	"os"
 	"path/filepath"
+
+	"github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -23,6 +24,8 @@ var defaultExcludedFiles = []string{
 	// Synology filesystem metadata
 	"@eaDir",
 	"@tmp",
+	// Dropbox cache files
+	".dropbox.cache",
 	// ignore our own configuration
 	configDir,
 }
