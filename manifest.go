@@ -80,20 +80,37 @@ func directoryChecksums(root string, config *Config, workers int) (map[string]Ch
 	var walkErr error
 	go func() {
 		walkErr = filepath.Walk(root, func(entryPath string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			relPath, err := filepath.Rel(root, entryPath)
-			if err != nil {
-				return err
+			// Compute relPath and check exclusion before looking at err: an
+			// unreadable excluded directory (e.g. macOS's .DocumentRevisions-V100,
+			// which is execute-only) should still be skipped rather than
+			// aborting the walk, since filepath.Walk surfaces a directory's
+			// own read error on the very call where we'd otherwise decide to
+			// skip it.
+			relPath, relErr := filepath.Rel(root, entryPath)
+			if relErr != nil {
+				return relErr
 			}
 			// Normalize Unicode combining characters
 			relPath = norm.NFC.String(relPath)
 
 			if config.isIgnoredPath(relPath) {
-				if info.IsDir() {
+				if info != nil && info.IsDir() {
 					// Skip walking this directory
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			if err != nil {
+				// The scan root itself being unreadable is fatal; a
+				// permission problem elsewhere in the tree is not - report
+				// it and keep going rather than abort an otherwise-fine,
+				// possibly multi-hour scan over one bad subtree.
+				if relPath == "." {
+					return err
+				}
+				results <- checksumResult{relPath: relPath, err: err}
+				if info != nil && info.IsDir() {
 					return filepath.SkipDir
 				}
 				return nil

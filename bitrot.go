@@ -66,6 +66,9 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	for _, fe := range errored {
 		cmd.logger.Printf("Error reading %s: %s\n", fe.Path, fe.Error)
 	}
+	if len(errored) > 0 {
+		cmd.logger.Printf("%d files could not be read.\n", len(errored))
+	}
 
 	latestManifest, err := manifestStorage.LatestManifestForPath(path)
 	if err != nil {
@@ -89,6 +92,9 @@ func (cmd *Scan) Execute(args []string) (err error) {
 
 	if comparison == nil {
 		cmd.logger.Printf("No previous manifest to compare for %s.\n", path)
+		if len(errored) > 0 {
+			return fmt.Errorf("")
+		}
 		return nil
 	}
 
@@ -106,8 +112,8 @@ func (cmd *Scan) Execute(args []string) (err error) {
 
 	deleted := len(comparison.DeletedPaths)
 	flagged := len(comparison.FlaggedPaths)
-	if deleted > 0 || flagged > 0 {
-		cmd.logger.Printf("%d files deleted, %d files flagged for possible corruption.\n", deleted, flagged)
+	if deleted > 0 || flagged > 0 || len(errored) > 0 {
+		cmd.logger.Printf("%d files deleted, %d files flagged for possible corruption, %d files could not be read.\n", deleted, flagged, len(errored))
 		return fmt.Errorf("")
 	}
 

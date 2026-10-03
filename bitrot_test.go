@@ -165,7 +165,7 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandWithExistingManifestFa
 	suite.LogContains("Deleted paths: 1\n    foo/deleted")
 	suite.LogContains("Modified paths: 1\n    foo/modified")
 	suite.LogContains("Flagged paths: 1\n    foo/flagged")
-	suite.LogContains("1 files deleted, 1 files flagged for possible corruption.")
+	suite.LogContains("1 files deleted, 1 files flagged for possible corruption, 0 files could not be read.")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestScanCommandWithRenames() {
@@ -190,7 +190,7 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandWithRenames() {
 	suite.LogContains("Added paths: 1\n    foo/added")
 	suite.LogContains("Deleted paths: 1\n    foo/deleted")
 	suite.LogContains("Renamed paths: 1\n    foo/testfile -> foo/testfile2")
-	suite.LogContains("1 files deleted, 0 files flagged for possible corruption.")
+	suite.LogContains("1 files deleted, 0 files flagged for possible corruption, 0 files could not be read.")
 }
 
 func (suite *CommandsIntegrationTestSuite) TestScanCommandWithPrefixExclusions() {
@@ -213,6 +213,51 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandWithPrefixExclusions()
 
 	suite.LogContains("Deleted paths: 0\n")
 	suite.LogContains("Scan validated for")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestScanCommandSkipsUnreadableExcludedDirectory() {
+	suite.writeTestFile("keep/me", helloWorldString)
+
+	unreadableDir := filepath.Join(suite.tempDir, "unreadable-excluded")
+	assert.Nil(suite.T(), os.MkdirAll(unreadableDir, 0755))
+	assert.Nil(suite.T(), os.Chmod(unreadableDir, 0000))
+	defer os.Chmod(unreadableDir, 0755)
+
+	err := suite.scanCommand(func(cmd *Scan) {
+		cmd.Exclude = []string{"unreadable-excluded"}
+	}).Execute([]string{})
+	assert.Nil(suite.T(), err)
+
+	suite.LogContains("Wrote manifest")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestScanCommandContinuesPastUnreadableDirectory() {
+	suite.writeTestFile("keep/me", helloWorldString)
+
+	unreadableDir := filepath.Join(suite.tempDir, "unreadable")
+	assert.Nil(suite.T(), os.MkdirAll(unreadableDir, 0755))
+	assert.Nil(suite.T(), os.Chmod(unreadableDir, 0000))
+	defer os.Chmod(unreadableDir, 0755)
+
+	err := suite.scanCommand().Execute([]string{})
+	assert.NotNil(suite.T(), err)
+
+	suite.LogContains("unreadable: permission denied")
+	suite.LogContains("1 files could not be read.")
+	suite.LogContains("Wrote manifest")
+
+	// The rest of the tree should still have been scanned and recorded
+	// despite the unreadable subtree.
+	manifestPaths, globErr := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
+	assert.Nil(suite.T(), globErr)
+	assert.Len(suite.T(), manifestPaths, 1)
+	f, openErr := os.Open(manifestPaths[0])
+	assert.Nil(suite.T(), openErr)
+	defer f.Close()
+	entries, readErr := ReadManifest(f)
+	assert.Nil(suite.T(), readErr)
+	_, hasKeepMe := entries["keep/me"]
+	assert.True(suite.T(), hasKeepMe)
 }
 
 func (suite *CommandsIntegrationTestSuite) TestScanCommandWithNameExclusionIsAdditiveToDefaults() {
