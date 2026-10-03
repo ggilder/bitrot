@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"testing"
 	"time"
 
@@ -59,35 +58,6 @@ func (suite *CommandsIntegrationTestSuite) TearDownTest() {
 	os.RemoveAll(suite.homeDir)
 }
 
-func (suite *CommandsIntegrationTestSuite) copyTempDir() string {
-	tempDirCopy, err := ioutil.TempDir("", "checksum")
-	assert.Nil(suite.T(), err)
-
-	// super dumb directory copy
-	err = filepath.Walk(suite.tempDir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if fi.Mode().IsRegular() {
-			relPath, err := filepath.Rel(suite.tempDir, path)
-			assert.Nil(suite.T(), err)
-			destPath := filepath.Join(tempDirCopy, relPath)
-			dir := filepath.Dir(destPath)
-			assert.Nil(suite.T(), os.MkdirAll(dir, 0755))
-			data, err := ioutil.ReadFile(path)
-			assert.Nil(suite.T(), err)
-			assert.Nil(suite.T(), ioutil.WriteFile(destPath, data, 0644))
-			err = os.Chtimes(destPath, fi.ModTime(), fi.ModTime())
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return tempDirCopy
-}
-
 func (suite *CommandsIntegrationTestSuite) writeTestFile(path, content string) {
 	testFile := filepath.Join(suite.tempDir, path)
 	dir := filepath.Dir(testFile)
@@ -122,87 +92,63 @@ func (suite *CommandsIntegrationTestSuite) clearLog() {
 	suite.logBuffer.Reset()
 }
 
-func (suite *CommandsIntegrationTestSuite) generateCommand(dir string) *Generate {
-	return &Generate{
-		Arguments: PathArguments{
-			Path: flags.Filename(dir),
-		},
-		logger: suite.logger,
-	}
-}
-
-func (suite *CommandsIntegrationTestSuite) validateCommand() *Validate {
-	return &Validate{
+func (suite *CommandsIntegrationTestSuite) scanCommand(opts ...func(*Scan)) *Scan {
+	cmd := &Scan{
 		Arguments: PathArguments{
 			Path: flags.Filename(suite.tempDir),
 		},
 		logger: suite.logger,
 	}
-}
-
-func (suite *CommandsIntegrationTestSuite) compareCommand(oldPath string) *Compare {
-	return &Compare{
-		Arguments: ComparedPathArguments{
-			Old: flags.Filename(oldPath),
-			New: flags.Filename(suite.tempDir),
-		},
-		logger: suite.logger,
+	for _, opt := range opts {
+		opt(cmd)
 	}
-}
-
-func (suite *CommandsIntegrationTestSuite) compareLatestManifestsCommand(oldPath string) *CompareLatestManifests {
-	return &CompareLatestManifests{
-		Arguments: ComparedPathArguments{
-			Old: flags.Filename(oldPath),
-			New: flags.Filename(suite.tempDir),
-		},
-		logger: suite.logger,
-	}
+	return cmd
 }
 
 func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
 	suite.Contains(suite.logBuffer.String(), text)
 }
 
-func (suite *CommandsIntegrationTestSuite) TestGenerateCommand() {
+func (suite *CommandsIntegrationTestSuite) TestScanCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
+	err := suite.scanCommand().Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains(fmt.Sprintf("Wrote manifest"))
+	suite.LogContains("Wrote manifest")
+	suite.LogContains("No previous manifest to compare")
 }
 
-func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifest() {
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWithExistingManifestSuccess() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
+	err := suite.scanCommand().Execute([]string{})
 	assert.Nil(suite.T(), err)
 
 	suite.clearLog()
 
-	// Get SHA & date from manifest
+	// Get timestamp from manifest filename
 	manifestPaths, err := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
 	assert.Nil(suite.T(), err)
-	manifestPath := manifestPaths[0]
-	re := regexp.MustCompile("manifest-([^-]+)-([^.]+).json$")
-	matches := re.FindAllStringSubmatch(manifestPath, -1)
-	ts := matches[0][1]
-
-	err = suite.generateCommand(suite.tempDir).Execute([]string{})
+	assert.Len(suite.T(), manifestPaths, 1)
+	ts, err := createdAtFromManifestFilename(manifestPaths[0])
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts))
+	err = suite.scanCommand().Execute([]string{})
+	assert.Nil(suite.T(), err)
+
+	suite.LogContains(fmt.Sprintf("Comparing to previous manifest from %s", ts.Format(manifestNameTimeFormat)))
 	suite.LogContains("Added paths: 0")
 	suite.LogContains("Deleted paths: 0")
 	suite.LogContains("Modified paths: 0")
 	suite.LogContains("Flagged paths: 0")
+	suite.LogContains("Scan validated for")
 }
 
-func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManifestFailure() {
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWithExistingManifestFailure() {
 	suite.writeTestFile("foo/flagged", helloWorldString)
 	suite.writeTestFile("foo/modified", "to modify")
 	assert.Nil(suite.T(), suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
 	suite.writeTestFile("foo/deleted", helloWorldString)
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
+	err := suite.scanCommand().Execute([]string{})
 	assert.Nil(suite.T(), err)
 
 	suite.clearLog()
@@ -212,132 +158,121 @@ func (suite *CommandsIntegrationTestSuite) TestGenerateCommandWithExistingManife
 	suite.corruptTestFile("foo/flagged")
 	suite.deleteTestFile("foo/deleted")
 
-	err = suite.generateCommand(suite.tempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
+	err = suite.scanCommand().Execute([]string{})
+	assert.NotNil(suite.T(), err)
 
 	suite.LogContains("Added paths: 1\n    foo/added")
 	suite.LogContains("Deleted paths: 1\n    foo/deleted")
 	suite.LogContains("Modified paths: 1\n    foo/modified")
 	suite.LogContains("Flagged paths: 1\n    foo/flagged")
+	suite.LogContains("1 files deleted, 1 files flagged for possible corruption.")
 }
 
-func (suite *CommandsIntegrationTestSuite) TestValidateCommand() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
-
-	suite.clearLog()
-	err = suite.validateCommand().Execute([]string{})
-	assert.Nil(suite.T(), err)
-
-	suite.LogContains(fmt.Sprintf("Validated manifest for %s.", suite.tempDir))
-}
-
-func (suite *CommandsIntegrationTestSuite) TestValidateCommandFailure() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
-
-	suite.corruptTestFile("foo/bar")
-	suite.clearLog()
-	err = suite.validateCommand().Execute([]string{})
-	assert.NotNil(suite.T(), err)
-
-	suite.LogContains("Flagged paths: 1\n    foo/bar\n")
-}
-
-func (suite *CommandsIntegrationTestSuite) TestValidateWithNoManifests() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.validateCommand().Execute([]string{})
-	assert.NotNil(suite.T(), err)
-
-	suite.LogContains(fmt.Sprintf("No previous manifest to validate for %s.", suite.tempDir))
-}
-
-func (suite *CommandsIntegrationTestSuite) TestCompare() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-	oldTempDir := suite.copyTempDir()
-	err := suite.compareCommand(oldTempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
-
-	suite.LogContains("Unchanged paths: 1\n")
-	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
-}
-
-func (suite *CommandsIntegrationTestSuite) TestCompareWithFailures() {
-	suite.writeTestFile("foo/flagged", helloWorldString)
-	suite.writeTestFile("foo/modified", "to modify")
-	assert.Nil(suite.T(), suite.backdateTestFile("foo/modified", time.Now().Add(-1*time.Minute)))
-	suite.writeTestFile("foo/deleted", helloWorldString)
-	oldTempDir := suite.copyTempDir()
-
-	// make modifications
-	suite.writeTestFile("foo/added", "added")
-	suite.writeTestFile("foo/modified", "modified")
-	suite.corruptTestFile("foo/flagged")
-	suite.deleteTestFile("foo/deleted")
-
-	err := suite.compareCommand(oldTempDir).Execute([]string{})
-	assert.NotNil(suite.T(), err)
-
-	suite.LogContains("1 files flagged for possible corruption.")
-	suite.LogContains("Unchanged paths: 0\n")
-	suite.LogContains("Added paths: 1\n    foo/added")
-	suite.LogContains("Deleted paths: 1\n    foo/deleted")
-	suite.LogContains("Modified paths: 1\n    foo/modified")
-	suite.LogContains("Flagged paths: 1\n    foo/flagged")
-}
-
-func (suite *CommandsIntegrationTestSuite) TestCompareWithRenames() {
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWithRenames() {
 	timestamp := time.Now()
 	suite.writeTestFile("foo/testfile", helloWorldString)
 	assert.Nil(suite.T(), suite.backdateTestFile("foo/testfile", timestamp))
 	suite.writeTestFile("foo/deleted", "deleted")
-	oldTempDir := suite.copyTempDir()
+	err := suite.scanCommand().Execute([]string{})
+	assert.Nil(suite.T(), err)
 
-	// make modifications
+	suite.clearLog()
+
 	suite.writeTestFile("foo/added", "added")
 	suite.writeTestFile("foo/testfile2", helloWorldString)
 	assert.Nil(suite.T(), suite.backdateTestFile("foo/testfile2", timestamp))
 	suite.deleteTestFile("foo/deleted")
 	suite.deleteTestFile("foo/testfile")
 
-	err := suite.compareCommand(oldTempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
+	err = suite.scanCommand().Execute([]string{})
+	assert.NotNil(suite.T(), err)
 
-	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
-	suite.LogContains("Unchanged paths: 0\n")
 	suite.LogContains("Added paths: 1\n    foo/added")
 	suite.LogContains("Deleted paths: 1\n    foo/deleted")
 	suite.LogContains("Renamed paths: 1\n    foo/testfile -> foo/testfile2")
+	suite.LogContains("1 files deleted, 0 files flagged for possible corruption.")
 }
 
-func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifests() {
-	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWithPrefixExclusions() {
+	suite.writeTestFile("keep/me", helloWorldString)
+	suite.writeTestFile("snapshots/weekly/2026-01-01/anything", helloWorldString)
+	err := suite.scanCommand(func(cmd *Scan) {
+		cmd.ExcludePrefix = []string{"snapshots/weekly"}
+	}).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	oldTempDir := suite.copyTempDir()
-	err = suite.generateCommand(oldTempDir).Execute([]string{})
+	suite.clearLog()
+
+	// Pruning the excluded snapshot directory shouldn't register as a deletion
+	assert.Nil(suite.T(), os.RemoveAll(filepath.Join(suite.tempDir, "snapshots")))
+
+	err = suite.scanCommand(func(cmd *Scan) {
+		cmd.ExcludePrefix = []string{"snapshots/weekly"}
+	}).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	err = suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
-	assert.Nil(suite.T(), err)
-
-	suite.LogContains(fmt.Sprintf("Successfully validated %s as a copy of %s.\n", suite.tempDir, oldTempDir))
-	suite.LogContains("Unchanged paths: 1\n")
+	suite.LogContains("Deleted paths: 0\n")
+	suite.LogContains("Scan validated for")
 }
 
-func (suite *CommandsIntegrationTestSuite) TestCompareLatestManifestsMissingManifest() {
-	oldTempDir := suite.copyTempDir()
-	err := suite.generateCommand(suite.tempDir).Execute([]string{})
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWithNameExclusionIsAdditiveToDefaults() {
+	suite.writeTestFile("keep/me", helloWorldString)
+	suite.writeTestFile("keep/.DS_Store", "junk")
+	suite.writeTestFile("keep/custom-junk", "also junk")
+
+	err := suite.scanCommand(func(cmd *Scan) {
+		cmd.Exclude = []string{"custom-junk"}
+	}).Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	err = suite.compareLatestManifestsCommand(oldTempDir).Execute([]string{})
+	// Get the manifest we just wrote and check its entries directly, since
+	// neither excluded name ever shows up as a tracked path to begin with.
+	manifestPaths, globErr := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
+	assert.Nil(suite.T(), globErr)
+	assert.Len(suite.T(), manifestPaths, 1)
+
+	f, openErr := os.Open(manifestPaths[0])
+	assert.Nil(suite.T(), openErr)
+	defer f.Close()
+	entries, readErr := ReadManifest(f)
+	assert.Nil(suite.T(), readErr)
+
+	_, hasKeepMe := entries["keep/me"]
+	_, hasDSStore := entries["keep/.DS_Store"]
+	_, hasCustomJunk := entries["keep/custom-junk"]
+	assert.True(suite.T(), hasKeepMe)
+	assert.False(suite.T(), hasDSStore, "built-in default exclusion (.DS_Store) should still apply")
+	assert.False(suite.T(), hasCustomJunk, "--exclude should add to, not replace, the defaults")
+}
+
+func (suite *CommandsIntegrationTestSuite) TestScanCommandLogFileAndTruncation() {
+	suite.writeTestFile("foo/deleted1", "deleted1")
+	suite.writeTestFile("foo/deleted2", "deleted2")
+	suite.writeTestFile("foo/deleted3", "deleted3")
+	err := suite.scanCommand().Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains(fmt.Sprintf("No existing manifest for %s\n", oldTempDir))
+	suite.deleteTestFile("foo/deleted1")
+	suite.deleteTestFile("foo/deleted2")
+	suite.deleteTestFile("foo/deleted3")
+
+	suite.clearLog()
+
+	logFile := filepath.Join(suite.tempDir, "full-report.txt")
+	err = suite.scanCommand(func(cmd *Scan) {
+		cmd.LogFile = logFile
+		cmd.Truncate = 1
+	}).Execute([]string{})
+	assert.NotNil(suite.T(), err)
+
+	suite.LogContains("... and 2 more (see full report)")
+
+	fullReport, readErr := ioutil.ReadFile(logFile)
+	assert.Nil(suite.T(), readErr)
+	assert.Contains(suite.T(), string(fullReport), "foo/deleted1")
+	assert.Contains(suite.T(), string(fullReport), "foo/deleted2")
+	assert.Contains(suite.T(), string(fullReport), "foo/deleted3")
+	assert.NotContains(suite.T(), string(fullReport), "... and")
 }
 
 func TestCommandsIntegrationTestSuite(t *testing.T) {

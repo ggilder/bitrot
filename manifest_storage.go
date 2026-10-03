@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -10,16 +11,20 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"time"
 )
 
 const (
-	manifestGlob         = "manifest-*.json"
-	manifestNameTemplate = "manifest-%s-%s.json"
+	manifestGlob         = "manifest-*.txt"
+	manifestNameTemplate = "manifest-%s-%s.txt"
 	// RFC3339 minus punctuation characters, better for filenames
-	manifestNameTimeFormat      = "20060102T150405Z07:00"
+	manifestNameTimeFormat      = "20060102T150405.000000000Z07:00"
 	manifestStorageMetadataName = "bitrot_meta.json"
 )
+
+var manifestFilenameRe = regexp.MustCompile(`^manifest-([^-]+)-[^.]+\.txt$`)
 
 type ManifestStorage struct {
 	Path string
@@ -62,20 +67,21 @@ func (m *ManifestStorage) List() ([]*ManifestStorageEntry, error) {
 }
 
 func (m *ManifestStorage) AddManifest(manifest *Manifest) error {
-	jsonBytes, err := json.Marshal(manifest)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := WriteManifest(&buf, manifest.Entries); err != nil {
 		return err
 	}
+	content := buf.Bytes()
 
 	manifestDir, err := m.addPath(manifest.Path)
 	if err != nil {
 		return err
 	}
-	filename := m.manifestFilename(manifest, jsonBytes)
+	filename := m.manifestFilename(manifest, content)
 	manifestPath := filepath.Join(manifestDir, filename)
 
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
-		err = ioutil.WriteFile(manifestPath, jsonBytes, 0644)
+		err = ioutil.WriteFile(manifestPath, content, 0644)
 		if err != nil {
 			return err
 		}
@@ -101,30 +107,49 @@ func (m *ManifestStorage) LatestManifestForPath(path string) (*Manifest, error) 
 	if len(manifestPaths) == 0 {
 		return nil, nil
 	}
-	return m.readManifestFile(manifestPaths[0])
+	return m.readManifestFile(manifestPaths[0], path)
 }
 
-func (m *ManifestStorage) readManifestFile(path string) (*Manifest, error) {
-	jsonBytes, err := ioutil.ReadFile(path)
+func (m *ManifestStorage) readManifestFile(filePath, forPath string) (*Manifest, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	entries, err := ReadManifest(f)
 	if err != nil {
 		return nil, err
 	}
 
-	var manifest Manifest
-	err = json.Unmarshal(jsonBytes, &manifest)
+	createdAt, err := createdAtFromManifestFilename(filePath)
 	if err != nil {
 		return nil, err
 	}
-	return &manifest, nil
+
+	return &Manifest{
+		Path:      forPath,
+		CreatedAt: createdAt,
+		Entries:   entries,
+	}, nil
+}
+
+func createdAtFromManifestFilename(filePath string) (time.Time, error) {
+	base := filepath.Base(filePath)
+	matches := manifestFilenameRe.FindStringSubmatch(base)
+	if matches == nil {
+		return time.Time{}, fmt.Errorf("unexpected manifest filename format: %s", base)
+	}
+	return time.Parse(manifestNameTimeFormat, matches[1])
 }
 
 func (m *ManifestStorage) parseMetadata(path string) (meta *ManifestStorageMetadata, err error) {
 	// File already exists; check metadata
-	bytes, err := ioutil.ReadFile(path)
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return
 	}
-	err = json.Unmarshal(bytes, &meta)
+	err = json.Unmarshal(data, &meta)
 	if err != nil {
 		return
 	}
@@ -144,11 +169,11 @@ func (m *ManifestStorage) addPath(path string) (string, error) {
 	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
 		// Write metadata
 		meta := ManifestStorageMetadata{Path: path}
-		bytes, err := json.Marshal(meta)
+		data, err := json.Marshal(meta)
 		if err != nil {
 			return "", err
 		}
-		err = ioutil.WriteFile(metadataPath, bytes, 0644)
+		err = ioutil.WriteFile(metadataPath, data, 0644)
 	} else {
 		// File already exists; check metadata
 		meta, err := m.parseMetadata(metadataPath)

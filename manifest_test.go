@@ -3,7 +3,7 @@ package main
 // TODO refactor tests to use testify/assert library like `bitrot_test.go` and
 // testify/suite to extract common before/after hooks
 import (
-	"encoding/json"
+	"bytes"
 	"io/ioutil"
 	"math"
 	"os"
@@ -16,7 +16,7 @@ import (
 )
 
 var helloWorldString = "hello! world\n"
-var helloWorldChecksum = "87b3fe7479c73ae4246dbe8081550f52e2cf9e59"
+var helloWorldChecksum = "dff770fab8b569686bad419a25a97033f90e89943dea564a91d6a4e7327fbfa9"
 
 func writeTestFile(t *testing.T, dir, name, content string) string {
 	testFile := filepath.Join(dir, name)
@@ -50,8 +50,9 @@ func TestDirectoryManifest(t *testing.T) {
 	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, err := NewManifest(tempDir, &config)
+	manifest, errored, err := NewManifest(tempDir, &config, 2)
 	assert.Nil(t, err)
+	assert.Empty(t, errored)
 
 	if manifest.Path != tempDir {
 		t.Fatalf("expected manifest path %s, got %s", tempDir, manifest.Path)
@@ -77,7 +78,7 @@ func TestDirectoryManifest(t *testing.T) {
 	}
 }
 
-func TestManifestExclusionOnFile(t *testing.T) {
+func TestManifestExclusionOnName(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	assert.Nil(t, err)
 
@@ -86,11 +87,12 @@ func TestManifestExclusionOnFile(t *testing.T) {
 	populateTestDirectory(t, tempDir)
 
 	config := Config{
-		ExcludedFiles: []string{"foo"},
+		ExcludedNames: []string{"foo"},
 	}
 
-	manifest, err := NewManifest(tempDir, &config)
+	manifest, errored, err := NewManifest(tempDir, &config, 2)
 	assert.Nil(t, err)
+	assert.Empty(t, errored)
 
 	if !reflect.DeepEqual(manifest.Entries, map[string]ChecksumRecord{}) {
 		t.Fatalf("Entries mismatch; expected %v, got %v", map[string]ChecksumRecord{}, manifest.Entries)
@@ -106,11 +108,12 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 	populateTestDirectory(t, tempDir)
 
 	config := Config{
-		ExcludedFiles: []string{"baz"},
+		ExcludedNames: []string{"baz"},
 	}
 
-	manifest, err := NewManifest(tempDir, &config)
+	manifest, errored, err := NewManifest(tempDir, &config, 2)
 	assert.Nil(t, err)
+	assert.Empty(t, errored)
 
 	entryPaths := []string{}
 	for path := range manifest.Entries {
@@ -123,43 +126,81 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 	}
 }
 
-func TestManifestJSON(t *testing.T) {
+func TestManifestExclusionOnPrefix(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	assert.Nil(t, err)
 
 	defer os.RemoveAll(tempDir)
 
-	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
+	populateTestDirectory(t, tempDir)
+
+	config := Config{
+		ExcludedPrefixes: []string{"bar/baz"},
+	}
+
+	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	assert.Nil(t, err)
+	assert.Empty(t, errored)
+
+	entryPaths := []string{}
+	for path := range manifest.Entries {
+		entryPaths = append(entryPaths, path)
+	}
+	expectedEntryPaths := []string{"foo"}
+
+	if !reflect.DeepEqual(entryPaths, expectedEntryPaths) {
+		t.Fatalf("Entries mismatch; expected %v, got %v", expectedEntryPaths, entryPaths)
+	}
+}
+
+func TestManifestExclusionOnPrefixDoesNotMatchSimilarSiblingNames(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	assert.Nil(t, err)
+
+	defer os.RemoveAll(tempDir)
+
+	writeTestFile(t, tempDir, "foo", helloWorldString)
+	assert.Nil(t, os.MkdirAll(filepath.Join(tempDir, "bar"), 0755))
+	assert.Nil(t, os.MkdirAll(filepath.Join(tempDir, "barbecue"), 0755))
+	writeTestFile(t, filepath.Join(tempDir, "bar"), "excluded", helloWorldString)
+	writeTestFile(t, filepath.Join(tempDir, "barbecue"), "included", helloWorldString)
+
+	config := Config{
+		ExcludedPrefixes: []string{"bar"},
+	}
+
+	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	assert.Nil(t, err)
+	assert.Empty(t, errored)
+
+	entryPaths := []string{}
+	for path := range manifest.Entries {
+		entryPaths = append(entryPaths, path)
+	}
+
+	assert.ElementsMatch(t, []string{"foo", "barbecue/included"}, entryPaths)
+}
+
+func TestManifestRoundTrip(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	assert.Nil(t, err)
+
+	defer os.RemoveAll(tempDir)
+
+	expectedChecksums, _ := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, err := NewManifest(tempDir, &config)
+	manifest, _, err := NewManifest(tempDir, &config, 2)
 	assert.Nil(t, err)
 
-	jsonBytes, err := json.Marshal(manifest)
+	var buf bytes.Buffer
+	assert.Nil(t, WriteManifest(&buf, manifest.Entries))
 
-	var recreatedManifest Manifest
-	err = json.Unmarshal(jsonBytes, &recreatedManifest)
+	roundTripped, err := ReadManifest(&buf)
 	assert.Nil(t, err)
 
-	if recreatedManifest.Path != tempDir {
-		t.Fatalf("expected JSON path %s, got %s", tempDir, recreatedManifest.Path)
-	}
-
-	if math.Abs(float64(recreatedManifest.CreatedAt.Unix()-expectedCreationTime.Unix())) > 5 {
-		t.Fatalf("expected manifest created_at within 5s of %v, got %v", expectedCreationTime, recreatedManifest.CreatedAt)
-	}
-
-	entries := recreatedManifest.Entries
-	if len(entries) != len(expectedChecksums) {
-		t.Fatalf(
-			"unexpected number of checksums! expected %d, got %d (%v)",
-			len(expectedChecksums),
-			len(entries),
-			entries,
-		)
-	}
-
-	for path, fileChecksum := range entries {
+	assert.Len(t, roundTripped, len(expectedChecksums))
+	for path, fileChecksum := range roundTripped {
 		if fileChecksum.Checksum != expectedChecksums[path] {
 			t.Fatalf("checksum mismatch; expected %s, got %s", expectedChecksums[path], fileChecksum.Checksum)
 		}
