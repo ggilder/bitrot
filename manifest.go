@@ -66,7 +66,17 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 		workers = runtime.NumCPU()
 	}
 
-	jobs := make(chan checksumJob)
+	// jobs is buffered so the walker (cheap stat/readdir calls) can race
+	// ahead of the hash workers (slow - full content reads) rather than
+	// blocking on every single handoff. An unbuffered channel would throttle
+	// the walk to roughly hashing's pace, defeating the point of tracking
+	// "discovered" separately from "scanned": it would never meaningfully
+	// lead, and the live total would just track completed work instead of
+	// becoming exact as soon as the walk itself finishes. Comfortably covers
+	// the ~900K files on /Volumes/plethora today with room to grow; the
+	// buffer's backing array costs ~32MB at this size, trivial here.
+	const jobQueueCapacity = 1_000_000
+	jobs := make(chan checksumJob, jobQueueCapacity)
 	results := make(chan checksumResult)
 	var workerGroup sync.WaitGroup
 	// Incremented by the walker at discovery time (before hashing), not by
