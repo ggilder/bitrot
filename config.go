@@ -19,13 +19,23 @@ var defaultExcludedNames = []string{
 	".DS_Store",
 	// Mac OS folder icon: "Icon" with ^M at the end
 	string([]byte{0x49, 0x63, 0x6f, 0x6e, 0x0d}),
+	// Mac OS volume-level metadata (Spotlight index, document versioning,
+	// Time Machine markers, fs event log, network-share temp items, Trash)
+	".Spotlight-V100",
+	".DocumentRevisions-V100",
+	".TemporaryItems",
+	".Trashes",
+	".com.apple.timemachine.donotpresent",
+	".com.apple.timemachine.supported",
+	".fseventsd",
 	// VCS folders
 	".git",
 	".svn",
 	// Synology filesystem metadata
 	"@eaDir",
 	"@tmp",
-	// Dropbox cache files
+	// Dropbox client metadata/cache
+	".dropbox",
 	".dropbox.cache",
 	// ignore our own configuration
 	configDir,

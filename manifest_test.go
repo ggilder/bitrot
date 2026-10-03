@@ -99,6 +99,29 @@ func TestManifestExclusionOnName(t *testing.T) {
 	}
 }
 
+func TestManifestExclusionCoversAllBuiltInDefaultNames(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	assert.Nil(t, err)
+
+	defer os.RemoveAll(tempDir)
+
+	writeTestFile(t, tempDir, "kept.txt", helloWorldString)
+	for _, name := range defaultExcludedNames {
+		writeTestFile(t, tempDir, name, "should be excluded")
+	}
+
+	config := DefaultConfig()
+	manifest, errored, err := NewManifest(tempDir, config, 2)
+	assert.Nil(t, err)
+	assert.Empty(t, errored)
+
+	entryPaths := []string{}
+	for path := range manifest.Entries {
+		entryPaths = append(entryPaths, path)
+	}
+	assert.Equal(t, []string{"kept.txt"}, entryPaths)
+}
+
 func TestManifestExclusionOnFolder(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	assert.Nil(t, err)
