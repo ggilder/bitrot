@@ -50,7 +50,7 @@ func TestDirectoryManifest(t *testing.T) {
 	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -90,7 +90,7 @@ func TestManifestExclusionOnName(t *testing.T) {
 		ExcludedNames: []string{"foo"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -111,7 +111,7 @@ func TestManifestExclusionCoversAllBuiltInDefaultNames(t *testing.T) {
 	}
 
 	config := DefaultConfig()
-	manifest, errored, err := NewManifest(tempDir, config, 2)
+	manifest, errored, err := NewManifest(tempDir, config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -134,7 +134,7 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 		ExcludedNames: []string{"baz"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -161,7 +161,7 @@ func TestManifestExclusionOnPrefix(t *testing.T) {
 		ExcludedPrefixes: []string{"bar/baz"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -192,7 +192,7 @@ func TestManifestExclusionOnPrefixDoesNotMatchSimilarSiblingNames(t *testing.T) 
 		ExcludedPrefixes: []string{"bar"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -213,7 +213,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	expectedChecksums, _ := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, _, err := NewManifest(tempDir, &config, 2)
+	manifest, _, err := NewManifest(tempDir, &config, 2, 0, nil)
 	assert.Nil(t, err)
 
 	var buf bytes.Buffer

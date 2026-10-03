@@ -31,9 +31,10 @@ type FileError struct {
 
 // NewManifest generates a Manifest from a directory path, hashing files in
 // parallel across workers goroutines. workers <= 0 defaults to the number of
-// CPUs.
-func NewManifest(path string, config *Config, workers int) (manifest *Manifest, errored []FileError, err error) {
-	entries, errored, err := directoryChecksums(path, config, workers)
+// CPUs. estimatedTotal (0 if unknown) and progress are purely cosmetic: they
+// only affect what's reported via progress, not the resulting Manifest.
+func NewManifest(path string, config *Config, workers int, estimatedTotal int, progress ProgressFunc) (manifest *Manifest, errored []FileError, err error) {
+	entries, errored, err := directoryChecksums(path, config, workers, estimatedTotal, progress)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,10 +56,11 @@ type checksumJob struct {
 type checksumResult struct {
 	relPath string
 	record  ChecksumRecord
+	size    int64
 	err     error
 }
 
-func directoryChecksums(root string, config *Config, workers int) (map[string]ChecksumRecord, []FileError, error) {
+func directoryChecksums(root string, config *Config, workers int, estimatedTotal int, progress ProgressFunc) (map[string]ChecksumRecord, []FileError, error) {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
 	}
@@ -132,12 +134,41 @@ func directoryChecksums(root string, config *Config, workers int) (map[string]Ch
 
 	records := map[string]ChecksumRecord{}
 	var errored []FileError
+	var scanned int
+	var bytesHashed int64
+	start := time.Now()
+	lastReported := time.Time{}
+	const progressInterval = 200 * time.Millisecond
+
 	for result := range results {
+		scanned++
 		if result.err != nil {
 			errored = append(errored, FileError{Path: result.relPath, Error: result.err})
-			continue
+		} else {
+			records[result.relPath] = result.record
+			bytesHashed += result.size
 		}
-		records[result.relPath] = result.record
+
+		if progress != nil && time.Since(lastReported) >= progressInterval {
+			progress(ProgressStats{
+				Scanned:        scanned,
+				EstimatedTotal: estimatedTotal,
+				BytesHashed:    bytesHashed,
+				Errored:        len(errored),
+				Elapsed:        time.Since(start),
+			})
+			lastReported = time.Now()
+		}
+	}
+
+	if progress != nil {
+		progress(ProgressStats{
+			Scanned:        scanned,
+			EstimatedTotal: estimatedTotal,
+			BytesHashed:    bytesHashed,
+			Errored:        len(errored),
+			Elapsed:        time.Since(start),
+		})
 	}
 
 	if walkErr != nil {
@@ -160,6 +191,7 @@ func hashJob(job checksumJob) checksumResult {
 
 	return checksumResult{
 		relPath: job.relPath,
+		size:    info.Size(),
 		record: ChecksumRecord{
 			Checksum: checksum,
 			ModTime:  info.ModTime().UTC(),

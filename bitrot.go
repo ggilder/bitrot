@@ -27,6 +27,7 @@ type Scan struct {
 	Workers       int           `short:"w" long:"workers" description:"Number of parallel hashing workers (defaults to number of CPUs)" default:"0"`
 	LogFile       string        `short:"l" long:"log-file" description:"Write the full, untruncated report to this file."`
 	Truncate      int           `short:"t" long:"truncate" description:"Maximum number of paths to print per section (0 = no truncation). Useful when piping the report somewhere size-constrained, like an email body." default:"0"`
+	Progress      bool          `short:"p" long:"progress" description:"Print a live progress status line to stderr while scanning. Off by default since it's noise if captured into a log/email."`
 	Arguments     PathArguments `required:"true" positional-args:"true"`
 	logger        *log.Logger
 }
@@ -57,9 +58,30 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	}
 	manifestStorage := config.ManifestStorage()
 
+	// Fetch the previous manifest first (cheap - one file) so its entry
+	// count can seed the progress estimate below.
+	latestManifest, err := manifestStorage.LatestManifestForPath(path)
+	if err != nil {
+		return err
+	}
+	estimatedTotal := 0
+	if latestManifest != nil {
+		estimatedTotal = len(latestManifest.Entries)
+	}
+
 	cmd.logger.Printf("Scanning %s...\n", path)
 
-	manifest, errored, err := NewManifest(path, config, cmd.Workers)
+	var progressFn ProgressFunc
+	var progressPrinter *ProgressPrinter
+	if cmd.Progress {
+		progressPrinter = NewProgressPrinter(os.Stderr)
+		progressFn = progressPrinter.Update
+	}
+
+	manifest, errored, err := NewManifest(path, config, cmd.Workers, estimatedTotal, progressFn)
+	if progressPrinter != nil {
+		progressPrinter.Finish()
+	}
 	if err != nil {
 		return err
 	}
@@ -68,11 +90,6 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	}
 	if len(errored) > 0 {
 		cmd.logger.Printf("%d files could not be read.\n", len(errored))
-	}
-
-	latestManifest, err := manifestStorage.LatestManifestForPath(path)
-	if err != nil {
-		return err
 	}
 
 	var comparison *ManifestComparison
