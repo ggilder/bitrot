@@ -58,17 +58,6 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	}
 	manifestStorage := config.ManifestStorage()
 
-	// Fetch the previous manifest first (cheap - one file) so its entry
-	// count can seed the progress estimate below.
-	latestManifest, err := manifestStorage.LatestManifestForPath(path)
-	if err != nil {
-		return err
-	}
-	estimatedTotal := 0
-	if latestManifest != nil {
-		estimatedTotal = len(latestManifest.Entries)
-	}
-
 	cmd.logger.Printf("Scanning %s...\n", path)
 
 	var progressFn ProgressFunc
@@ -78,7 +67,7 @@ func (cmd *Scan) Execute(args []string) (err error) {
 		progressFn = progressPrinter.Update
 	}
 
-	manifest, errored, err := NewManifest(path, config, cmd.Workers, estimatedTotal, progressFn)
+	manifest, errored, err := NewManifest(path, config, cmd.Workers, progressFn)
 	if progressPrinter != nil {
 		progressPrinter.Finish()
 	}
@@ -90,6 +79,11 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	}
 	if len(errored) > 0 {
 		cmd.logger.Printf("%d files could not be read.\n", len(errored))
+	}
+
+	latestManifest, err := manifestStorage.LatestManifestForPath(path)
+	if err != nil {
+		return err
 	}
 
 	var comparison *ManifestComparison

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,10 +32,10 @@ type FileError struct {
 
 // NewManifest generates a Manifest from a directory path, hashing files in
 // parallel across workers goroutines. workers <= 0 defaults to the number of
-// CPUs. estimatedTotal (0 if unknown) and progress are purely cosmetic: they
-// only affect what's reported via progress, not the resulting Manifest.
-func NewManifest(path string, config *Config, workers int, estimatedTotal int, progress ProgressFunc) (manifest *Manifest, errored []FileError, err error) {
-	entries, errored, err := directoryChecksums(path, config, workers, estimatedTotal, progress)
+// CPUs. progress is purely cosmetic: it only affects what's reported via
+// progress, not the resulting Manifest.
+func NewManifest(path string, config *Config, workers int, progress ProgressFunc) (manifest *Manifest, errored []FileError, err error) {
+	entries, errored, err := directoryChecksums(path, config, workers, progress)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,7 +61,7 @@ type checksumResult struct {
 	err     error
 }
 
-func directoryChecksums(root string, config *Config, workers int, estimatedTotal int, progress ProgressFunc) (map[string]ChecksumRecord, []FileError, error) {
+func directoryChecksums(root string, config *Config, workers int, progress ProgressFunc) (map[string]ChecksumRecord, []FileError, error) {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
 	}
@@ -68,6 +69,11 @@ func directoryChecksums(root string, config *Config, workers int, estimatedTotal
 	jobs := make(chan checksumJob)
 	results := make(chan checksumResult)
 	var workerGroup sync.WaitGroup
+	// Incremented by the walker at discovery time (before hashing), not by
+	// the result loop at completion time - so it runs ahead of "scanned"
+	// and becomes an exact total as soon as the walk finishes, rather than
+	// needing a previous manifest to seed an estimate from.
+	var discovered int64
 
 	for i := 0; i < workers; i++ {
 		workerGroup.Add(1)
@@ -111,6 +117,7 @@ func directoryChecksums(root string, config *Config, workers int, estimatedTotal
 				if relPath == "." {
 					return err
 				}
+				atomic.AddInt64(&discovered, 1)
 				results <- checksumResult{relPath: relPath, err: err}
 				if info != nil && info.IsDir() {
 					return filepath.SkipDir
@@ -119,6 +126,7 @@ func directoryChecksums(root string, config *Config, workers int, estimatedTotal
 			}
 
 			if info.Mode().IsRegular() {
+				atomic.AddInt64(&discovered, 1)
 				jobs <- checksumJob{relPath: relPath, absPath: entryPath}
 			}
 
@@ -152,7 +160,7 @@ func directoryChecksums(root string, config *Config, workers int, estimatedTotal
 		if progress != nil && time.Since(lastReported) >= progressInterval {
 			progress(ProgressStats{
 				Scanned:        scanned,
-				EstimatedTotal: estimatedTotal,
+				EstimatedTotal: int(atomic.LoadInt64(&discovered)),
 				BytesHashed:    bytesHashed,
 				Errored:        len(errored),
 				Elapsed:        time.Since(start),
@@ -164,7 +172,7 @@ func directoryChecksums(root string, config *Config, workers int, estimatedTotal
 	if progress != nil {
 		progress(ProgressStats{
 			Scanned:        scanned,
-			EstimatedTotal: estimatedTotal,
+			EstimatedTotal: int(atomic.LoadInt64(&discovered)),
 			BytesHashed:    bytesHashed,
 			Errored:        len(errored),
 			Elapsed:        time.Since(start),

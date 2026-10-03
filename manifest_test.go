@@ -50,7 +50,7 @@ func TestDirectoryManifest(t *testing.T) {
 	expectedChecksums, expectedCreationTime := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -78,6 +78,32 @@ func TestDirectoryManifest(t *testing.T) {
 	}
 }
 
+func TestNewManifestReportsExactTotalViaLiveDiscoveryWithNoHistory(t *testing.T) {
+	tempDir, err := ioutil.TempDir("", "checksum")
+	assert.Nil(t, err)
+
+	defer os.RemoveAll(tempDir)
+
+	expectedChecksums, _ := populateTestDirectory(t, tempDir)
+
+	// NewManifest calls progress synchronously from the caller's goroutine
+	// (directoryChecksums's result loop runs in-line, not in its own
+	// goroutine), so no synchronization is needed here.
+	var finalStats ProgressStats
+	config := Config{}
+	manifest, errored, err := NewManifest(tempDir, &config, 2, func(stats ProgressStats) {
+		finalStats = stats
+	})
+	assert.Nil(t, err)
+	assert.Empty(t, errored)
+
+	// No previous manifest exists for this path at all, yet the final
+	// progress update should still report the exact total, discovered live
+	// by the walk rather than seeded from history.
+	assert.Equal(t, len(expectedChecksums), finalStats.EstimatedTotal)
+	assert.Equal(t, len(manifest.Entries), finalStats.Scanned)
+}
+
 func TestManifestExclusionOnName(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "checksum")
 	assert.Nil(t, err)
@@ -90,7 +116,7 @@ func TestManifestExclusionOnName(t *testing.T) {
 		ExcludedNames: []string{"foo"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -111,7 +137,7 @@ func TestManifestExclusionCoversAllBuiltInDefaultNames(t *testing.T) {
 	}
 
 	config := DefaultConfig()
-	manifest, errored, err := NewManifest(tempDir, config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -134,7 +160,7 @@ func TestManifestExclusionOnFolder(t *testing.T) {
 		ExcludedNames: []string{"baz"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -161,7 +187,7 @@ func TestManifestExclusionOnPrefix(t *testing.T) {
 		ExcludedPrefixes: []string{"bar/baz"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -192,7 +218,7 @@ func TestManifestExclusionOnPrefixDoesNotMatchSimilarSiblingNames(t *testing.T) 
 		ExcludedPrefixes: []string{"bar"},
 	}
 
-	manifest, errored, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, errored, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, errored)
 
@@ -213,7 +239,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	expectedChecksums, _ := populateTestDirectory(t, tempDir)
 
 	config := Config{}
-	manifest, _, err := NewManifest(tempDir, &config, 2, 0, nil)
+	manifest, _, err := NewManifest(tempDir, &config, 2, nil)
 	assert.Nil(t, err)
 
 	var buf bytes.Buffer

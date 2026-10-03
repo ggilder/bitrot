@@ -8,8 +8,12 @@ import (
 
 // ProgressStats is a snapshot of scan progress at a point in time.
 type ProgressStats struct {
-	Scanned        int
-	EstimatedTotal int // 0 means unknown (no previous manifest to estimate from)
+	Scanned int
+	// EstimatedTotal is how many files the walk has discovered so far - it
+	// grows while the walk is still running and becomes an exact total once
+	// the walk finishes (which happens well before hashing does, since
+	// walking is metadata-only). 0 means nothing's been discovered yet.
+	EstimatedTotal int
 	BytesHashed    int64
 	Errored        int
 	Elapsed        time.Duration
