@@ -111,25 +111,29 @@ func (suite *CommandsIntegrationTestSuite) LogContains(text string) {
 
 func (suite *CommandsIntegrationTestSuite) TestScanCommand() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.scanCommand().Execute([]string{})
+	cmd := suite.scanCommand()
+	err := cmd.Execute([]string{})
 	assert.Nil(suite.T(), err)
 
-	suite.LogContains("Wrote manifest")
 	suite.LogContains("No previous manifest to compare")
+
+	// The log should name the exact manifest file written, not just the
+	// storage root.
+	assert.NotEmpty(suite.T(), cmd.WrittenManifestPath)
+	suite.LogContains(fmt.Sprintf("Wrote manifest to %s", cmd.WrittenManifestPath))
+	_, statErr := os.Stat(cmd.WrittenManifestPath)
+	assert.Nil(suite.T(), statErr)
 }
 
 func (suite *CommandsIntegrationTestSuite) TestScanCommandWithExistingManifestSuccess() {
 	suite.writeTestFile("foo/bar", helloWorldString)
-	err := suite.scanCommand().Execute([]string{})
+	firstScan := suite.scanCommand()
+	err := firstScan.Execute([]string{})
 	assert.Nil(suite.T(), err)
 
 	suite.clearLog()
 
-	// Get timestamp from manifest filename
-	manifestPaths, err := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
-	assert.Nil(suite.T(), err)
-	assert.Len(suite.T(), manifestPaths, 1)
-	ts, err := createdAtFromManifestFilename(manifestPaths[0])
+	ts, err := createdAtFromManifestFilename(firstScan.WrittenManifestPath)
 	assert.Nil(suite.T(), err)
 
 	err = suite.scanCommand().Execute([]string{})
@@ -239,7 +243,8 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandContinuesPastUnreadabl
 	assert.Nil(suite.T(), os.Chmod(unreadableDir, 0000))
 	defer os.Chmod(unreadableDir, 0755)
 
-	err := suite.scanCommand().Execute([]string{})
+	cmd := suite.scanCommand()
+	err := cmd.Execute([]string{})
 	assert.NotNil(suite.T(), err)
 
 	suite.LogContains("unreadable: permission denied")
@@ -248,10 +253,7 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandContinuesPastUnreadabl
 
 	// The rest of the tree should still have been scanned and recorded
 	// despite the unreadable subtree.
-	manifestPaths, globErr := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
-	assert.Nil(suite.T(), globErr)
-	assert.Len(suite.T(), manifestPaths, 1)
-	f, openErr := os.Open(manifestPaths[0])
+	f, openErr := os.Open(cmd.WrittenManifestPath)
 	assert.Nil(suite.T(), openErr)
 	defer f.Close()
 	entries, readErr := ReadManifest(f)
@@ -265,18 +267,15 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommandWithNameExclusionIsAdd
 	suite.writeTestFile("keep/.DS_Store", "junk")
 	suite.writeTestFile("keep/custom-junk", "also junk")
 
-	err := suite.scanCommand(func(cmd *Scan) {
+	cmd := suite.scanCommand(func(cmd *Scan) {
 		cmd.Exclude = []string{"custom-junk"}
-	}).Execute([]string{})
+	})
+	err := cmd.Execute([]string{})
 	assert.Nil(suite.T(), err)
 
 	// Get the manifest we just wrote and check its entries directly, since
 	// neither excluded name ever shows up as a tracked path to begin with.
-	manifestPaths, globErr := filepath.Glob(filepath.Join(suite.homeDir, configDir, configStorageDir, "*", manifestGlob))
-	assert.Nil(suite.T(), globErr)
-	assert.Len(suite.T(), manifestPaths, 1)
-
-	f, openErr := os.Open(manifestPaths[0])
+	f, openErr := os.Open(cmd.WrittenManifestPath)
 	assert.Nil(suite.T(), openErr)
 	defer f.Close()
 	entries, readErr := ReadManifest(f)

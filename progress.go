@@ -11,12 +11,15 @@ type ProgressStats struct {
 	Scanned int
 	// EstimatedTotal is how many files the walk has discovered so far - it
 	// grows while the walk is still running and becomes an exact total once
-	// the walk finishes (which happens well before hashing does, since
-	// walking is metadata-only). 0 means nothing's been discovered yet.
+	// the walk finishes. 0 means nothing's been discovered yet.
 	EstimatedTotal int
-	BytesHashed    int64
-	Errored        int
-	Elapsed        time.Duration
+	// TotalIsExact is true once the walk itself has finished, at which
+	// point EstimatedTotal stops growing and is the real total rather than
+	// a lower bound still catching up.
+	TotalIsExact bool
+	BytesHashed  int64
+	Errored      int
+	Elapsed      time.Duration
 }
 
 // ProgressFunc is called periodically as files are processed. Implementations
@@ -60,7 +63,11 @@ func formatProgressLine(stats ProgressStats) string {
 			remaining = 0
 		}
 		pct := float64(stats.Scanned) / float64(stats.EstimatedTotal) * 100
-		line += fmt.Sprintf("/~%d files (%.1f%%, ~%d remaining)", stats.EstimatedTotal, pct, remaining)
+		tilde := "~"
+		if stats.TotalIsExact {
+			tilde = ""
+		}
+		line += fmt.Sprintf("/%s%d files (%.1f%%, %s%d remaining)", tilde, stats.EstimatedTotal, pct, tilde, remaining)
 
 		// ETA from the observed files/sec rate - only meaningful once we've
 		// actually processed something and have files left to go.

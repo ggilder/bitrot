@@ -66,16 +66,18 @@ func (m *ManifestStorage) List() ([]*ManifestStorageEntry, error) {
 	return entries, nil
 }
 
-func (m *ManifestStorage) AddManifest(manifest *Manifest) error {
+// AddManifest writes manifest to storage and returns the path it was
+// written to.
+func (m *ManifestStorage) AddManifest(manifest *Manifest) (string, error) {
 	var buf bytes.Buffer
 	if err := WriteManifest(&buf, manifest.Entries); err != nil {
-		return err
+		return "", err
 	}
 	content := buf.Bytes()
 
 	manifestDir, err := m.addPath(manifest.Path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	filename := m.manifestFilename(manifest, content)
 	manifestPath := filepath.Join(manifestDir, filename)
@@ -83,13 +85,13 @@ func (m *ManifestStorage) AddManifest(manifest *Manifest) error {
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
 		err = ioutil.WriteFile(manifestPath, content, 0644)
 		if err != nil {
-			return err
+			return "", err
 		}
 	} else {
-		return fmt.Errorf("manifest file already exists at path %s", manifestPath)
+		return "", fmt.Errorf("manifest file already exists at path %s", manifestPath)
 	}
 
-	return nil
+	return manifestPath, nil
 }
 
 func (m *ManifestStorage) LatestManifestForPath(path string) (*Manifest, error) {

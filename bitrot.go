@@ -30,6 +30,12 @@ type Scan struct {
 	Progress      bool          `short:"p" long:"progress" description:"Print a live progress status line to stderr while scanning. Off by default since it's noise if captured into a log/email."`
 	Arguments     PathArguments `required:"true" positional-args:"true"`
 	logger        *log.Logger
+
+	// WrittenManifestPath is the exact path of the manifest written by the
+	// most recent Execute call, exposed for callers (tests, mainly) that
+	// want it directly rather than re-deriving it from the log text or the
+	// filesystem.
+	WrittenManifestPath string
 }
 
 // Extracts string path from wrapper and converts it to an absolute path
@@ -94,12 +100,13 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	}
 
 	// Write new manifest
-	err = manifestStorage.AddManifest(manifest)
+	manifestPath, err := manifestStorage.AddManifest(manifest)
 	if err != nil {
 		cmd.logger.Fatalf("Error saving manifest! %s\n", err)
 		return err
 	}
-	cmd.logger.Printf("Wrote manifest in %s\n", manifestStorage.Path)
+	cmd.WrittenManifestPath = manifestPath
+	cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 
 	if comparison == nil {
 		cmd.logger.Printf("No previous manifest to compare for %s.\n", path)

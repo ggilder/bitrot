@@ -83,7 +83,8 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 	// the result loop at completion time - so it runs ahead of "scanned"
 	// and becomes an exact total as soon as the walk finishes, rather than
 	// needing a previous manifest to seed an estimate from.
-	var discovered int64
+	var discovered atomic.Int64
+	var walkComplete atomic.Bool
 
 	for i := 0; i < workers; i++ {
 		workerGroup.Add(1)
@@ -127,7 +128,7 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 				if relPath == "." {
 					return err
 				}
-				atomic.AddInt64(&discovered, 1)
+				discovered.Add(1)
 				results <- checksumResult{relPath: relPath, err: err}
 				if info != nil && info.IsDir() {
 					return filepath.SkipDir
@@ -136,12 +137,13 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 			}
 
 			if info.Mode().IsRegular() {
-				atomic.AddInt64(&discovered, 1)
+				discovered.Add(1)
 				jobs <- checksumJob{relPath: relPath, absPath: entryPath}
 			}
 
 			return nil
 		})
+		walkComplete.Store(true)
 		close(jobs)
 	}()
 
@@ -170,7 +172,8 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 		if progress != nil && time.Since(lastReported) >= progressInterval {
 			progress(ProgressStats{
 				Scanned:        scanned,
-				EstimatedTotal: int(atomic.LoadInt64(&discovered)),
+				EstimatedTotal: int(discovered.Load()),
+				TotalIsExact:   walkComplete.Load(),
 				BytesHashed:    bytesHashed,
 				Errored:        len(errored),
 				Elapsed:        time.Since(start),
@@ -182,7 +185,8 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 	if progress != nil {
 		progress(ProgressStats{
 			Scanned:        scanned,
-			EstimatedTotal: int(atomic.LoadInt64(&discovered)),
+			EstimatedTotal: int(discovered.Load()),
+			TotalIsExact:   walkComplete.Load(),
 			BytesHashed:    bytesHashed,
 			Errored:        len(errored),
 			Elapsed:        time.Since(start),

@@ -39,6 +39,18 @@ func TestFormatProgressLineWithEstimate(t *testing.T) {
 	assert.Contains(t, line, "2 errors")
 }
 
+func TestFormatProgressLineDropsTildeOnceTotalIsExact(t *testing.T) {
+	line := formatProgressLine(ProgressStats{
+		Scanned:        100,
+		EstimatedTotal: 1000,
+		TotalIsExact:   true,
+		Elapsed:        10 * time.Second,
+	})
+
+	assert.Contains(t, line, "Scanned 100/1000 files (10.0%, 900 remaining)")
+	assert.NotContains(t, line, "~")
+}
+
 func TestFormatProgressLineEstimateDoesNotGoNegativeWhenOverrun(t *testing.T) {
 	// A scan can exceed the previous manifest's entry count (files were
 	// added since the last run); remaining/pct shouldn't go negative.
