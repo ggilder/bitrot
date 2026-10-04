@@ -86,12 +86,18 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 	var discovered atomic.Int64
 	var walkComplete atomic.Bool
 
+	// 4MiB, matching dropbox-sync-verifier's block size - allocated once
+	// per worker and reused across every file that worker hashes, rather
+	// than per file.
+	const hashBufferSize = 4 * 1024 * 1024
+
 	for i := 0; i < workers; i++ {
 		workerGroup.Add(1)
 		go func() {
 			defer workerGroup.Done()
+			buf := make([]byte, hashBufferSize)
 			for job := range jobs {
-				results <- hashJob(job)
+				results <- hashJob(job, buf)
 			}
 		}()
 	}
@@ -200,13 +206,13 @@ func directoryChecksums(root string, config *Config, workers int, progress Progr
 	return records, errored, nil
 }
 
-func hashJob(job checksumJob) checksumResult {
+func hashJob(job checksumJob, buf []byte) checksumResult {
 	info, err := os.Stat(job.absPath)
 	if err != nil {
 		return checksumResult{relPath: job.relPath, err: err}
 	}
 
-	checksum, err := hashFile(job.absPath)
+	checksum, err := hashFile(job.absPath, buf)
 	if err != nil {
 		return checksumResult{relPath: job.relPath, err: err}
 	}
