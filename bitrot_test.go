@@ -125,6 +125,23 @@ func (suite *CommandsIntegrationTestSuite) TestScanCommand() {
 	assert.Nil(suite.T(), statErr)
 }
 
+func (suite *CommandsIntegrationTestSuite) TestScanCommandWritesLogFileOnFirstScan() {
+	suite.writeTestFile("foo/bar", helloWorldString)
+
+	logFile := filepath.Join(suite.tempDir, "first-scan-report.txt")
+	err := suite.scanCommand(func(cmd *Scan) {
+		cmd.LogFile = logFile
+	}).Execute([]string{})
+	assert.Nil(suite.T(), err)
+
+	suite.LogContains("No previous manifest to compare")
+	suite.LogContains(fmt.Sprintf("Wrote full report to %s", logFile))
+
+	content, readErr := ioutil.ReadFile(logFile)
+	assert.Nil(suite.T(), readErr)
+	assert.Contains(suite.T(), string(content), "No previous manifest to compare")
+}
+
 func (suite *CommandsIntegrationTestSuite) TestScanCommandWithExistingManifestSuccess() {
 	suite.writeTestFile("foo/bar", helloWorldString)
 	firstScan := suite.scanCommand()

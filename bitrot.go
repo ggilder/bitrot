@@ -108,25 +108,37 @@ func (cmd *Scan) Execute(args []string) (err error) {
 	cmd.WrittenManifestPath = manifestPath
 	cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 
-	if comparison == nil {
-		cmd.logger.Printf("No previous manifest to compare for %s.\n", path)
-		if len(errored) > 0 {
-			return fmt.Errorf("")
-		}
-		return nil
+	// fullReport/printedReport are computed - and, if --log-file is set,
+	// written - unconditionally, even on a first scan with nothing to
+	// compare yet. Previously --log-file only ran inside the "comparison
+	// exists" branch, so it silently did nothing on a path's first-ever
+	// scan.
+	var fullReport, printedReport string
+	if comparison != nil {
+		report := NewComparisonReport(comparison)
+		fullReport = report.ReportString()
+		printedReport = report.TruncatedReportString(cmd.Truncate)
+	} else {
+		fullReport = fmt.Sprintf("No previous manifest to compare for %s.\n", path)
+		printedReport = fullReport
 	}
 
-	report := NewComparisonReport(comparison)
-
 	if cmd.LogFile != "" {
-		if writeErr := ioutil.WriteFile(cmd.LogFile, []byte(report.ReportString()), 0644); writeErr != nil {
+		if writeErr := ioutil.WriteFile(cmd.LogFile, []byte(fullReport), 0644); writeErr != nil {
 			cmd.logger.Printf("Error writing full report to %s: %s\n", cmd.LogFile, writeErr)
 		} else {
 			cmd.logger.Printf("Wrote full report to %s\n", cmd.LogFile)
 		}
 	}
 
-	cmd.logger.Printf(report.TruncatedReportString(cmd.Truncate))
+	cmd.logger.Printf(printedReport)
+
+	if comparison == nil {
+		if len(errored) > 0 {
+			return fmt.Errorf("")
+		}
+		return nil
+	}
 
 	deleted := len(comparison.DeletedPaths)
 	flagged := len(comparison.FlaggedPaths)
