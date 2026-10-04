@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mitchellh/go-homedir"
 )
@@ -13,18 +14,28 @@ const (
 )
 
 // TODO should ignored files and directories be handled separately?
-var defaultExcludedFiles = []string{
+var defaultExcludedNames = []string{
 	// Mac OS Finder metadata
 	".DS_Store",
 	// Mac OS folder icon: "Icon" with ^M at the end
 	string([]byte{0x49, 0x63, 0x6f, 0x6e, 0x0d}),
+	// Mac OS volume-level metadata (Spotlight index, document versioning,
+	// Time Machine markers, fs event log, network-share temp items, Trash)
+	".Spotlight-V100",
+	".DocumentRevisions-V100",
+	".TemporaryItems",
+	".Trashes",
+	".com.apple.timemachine.donotpresent",
+	".com.apple.timemachine.supported",
+	".fseventsd",
 	// VCS folders
 	".git",
 	".svn",
 	// Synology filesystem metadata
 	"@eaDir",
 	"@tmp",
-	// Dropbox cache files
+	// Dropbox client metadata/cache
+	".dropbox",
 	".dropbox.cache",
 	// ignore our own configuration
 	configDir,
@@ -34,9 +45,15 @@ var defaultExcludedFiles = []string{
 
 // Config for bitrot checks such as file/folder names to exclude.
 type Config struct {
-	ExcludedFiles   []string
-	Dir             string
-	manifestStorage *ManifestStorage
+	// ExcludedNames are file/directory basenames to exclude wherever they
+	// occur in the tree (e.g. ".DS_Store").
+	ExcludedNames []string
+	// ExcludedPrefixes are paths, relative to the directory being scanned,
+	// to exclude along with everything under them (e.g. "Downloads" or
+	// "snapshots/weekly").
+	ExcludedPrefixes []string
+	Dir              string
+	manifestStorage  *ManifestStorage
 }
 
 func DefaultConfig() *Config {
@@ -49,18 +66,33 @@ func DefaultConfig() *Config {
 		}
 	}
 	return &Config{
-		ExcludedFiles: defaultExcludedFiles,
+		ExcludedNames: defaultExcludedNames,
 		Dir:           filepath.Join(basedir, configDir),
 	}
 }
 
-func (c *Config) isIgnoredPath(path string) bool {
-	base := filepath.Base(path)
-	for _, ignoredName := range c.ExcludedFiles {
+// isIgnoredPath reports whether relPath, a path relative to the directory
+// being scanned, should be excluded. The root of the scan itself (relPath
+// == ".") is never excluded.
+func (c *Config) isIgnoredPath(relPath string) bool {
+	if relPath == "." {
+		return false
+	}
+
+	base := filepath.Base(relPath)
+	for _, ignoredName := range c.ExcludedNames {
 		if base == ignoredName {
 			return true
 		}
 	}
+
+	for _, prefix := range c.ExcludedPrefixes {
+		prefix = filepath.Clean(prefix)
+		if relPath == prefix || strings.HasPrefix(relPath, prefix+string(filepath.Separator)) {
+			return true
+		}
+	}
+
 	return false
 }
 

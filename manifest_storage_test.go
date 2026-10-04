@@ -34,7 +34,9 @@ func TestManifestStorage(t *testing.T) {
 		Path:      testPath,
 		CreatedAt: createdAt,
 	}
-	assert.Nil(t, s.AddManifest(manifest))
+	manifestPath, err := s.AddManifest(manifest)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, manifestPath)
 
 	entries, err = s.List()
 	assert.Nil(t, err)

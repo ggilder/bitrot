@@ -48,15 +48,16 @@ func (comp *ManifestComparison) compare() {
 		return
 	}
 
-	// First look for paths added in new
-	for path := range comp.newManifest.Entries {
-		_, oldEntryPresent := comp.oldManifest.Entries[path]
-		if !oldEntryPresent {
-			comp.AddedPaths = append(comp.AddedPaths, path)
+	// Index paths added in new by checksum, so renamed-file matching below is
+	// O(1) per lookup instead of a linear scan over every added path.
+	addedByChecksum := map[string][]string{}
+	for path, newEntry := range comp.newManifest.Entries {
+		if _, oldEntryPresent := comp.oldManifest.Entries[path]; !oldEntryPresent {
+			addedByChecksum[newEntry.Checksum] = append(addedByChecksum[newEntry.Checksum], path)
 		}
 	}
 
-	// Then look for modifications, deletions, renames, or corruptions of files from old to new
+	// Look for modifications, deletions, renames, or corruptions of files from old to new
 	for path, oldEntry := range comp.oldManifest.Entries {
 		// Handle a matching path entry in new manifest
 		if comp.handleEntry(path, &oldEntry) {
@@ -64,12 +65,17 @@ func (comp *ManifestComparison) compare() {
 		}
 
 		// Handle a renamed path in new manifest
-		if comp.handleRenamedEntry(path, &oldEntry) {
+		if comp.handleRenamedEntry(path, &oldEntry, addedByChecksum) {
 			continue
 		}
 
 		// If no matching or renamed entry in new manifest, entry was deleted
 		comp.DeletedPaths = append(comp.DeletedPaths, path)
+	}
+
+	// Whatever's left in addedByChecksum wasn't claimed as a rename target
+	for _, paths := range addedByChecksum {
+		comp.AddedPaths = append(comp.AddedPaths, paths...)
 	}
 
 	comp.complete = true
@@ -96,30 +102,20 @@ func (comp *ManifestComparison) handleEntry(path string, oldEntry *ChecksumRecor
 	return true
 }
 
-func (comp *ManifestComparison) handleRenamedEntry(path string, oldEntry *ChecksumRecord) bool {
-	newPath := comp.findRenamedPathByChecksum(oldEntry.Checksum)
-	if newPath == "" {
+func (comp *ManifestComparison) handleRenamedEntry(path string, oldEntry *ChecksumRecord, addedByChecksum map[string][]string) bool {
+	candidates := addedByChecksum[oldEntry.Checksum]
+	if len(candidates) == 0 {
 		return false
+	}
+
+	newPath := candidates[0]
+	if len(candidates) == 1 {
+		delete(addedByChecksum, oldEntry.Checksum)
+	} else {
+		addedByChecksum[oldEntry.Checksum] = candidates[1:]
 	}
 
 	comp.RenamedPaths = append(comp.RenamedPaths, RenamedPath{OldPath: path, NewPath: newPath})
 
-	// Remove from added paths
-	for idx, path := range comp.AddedPaths {
-		if path == newPath {
-			comp.AddedPaths = append(comp.AddedPaths[:idx], comp.AddedPaths[idx+1:]...)
-			break
-		}
-	}
-
 	return true
-}
-
-func (comp *ManifestComparison) findRenamedPathByChecksum(checksum string) string {
-	for _, newPath := range comp.AddedPaths {
-		if comp.newManifest.Entries[newPath].Checksum == checksum {
-			return newPath
-		}
-	}
-	return ""
 }

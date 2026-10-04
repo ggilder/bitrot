@@ -67,6 +67,40 @@ func TestTotalChecked(t *testing.T) {
 	assert.Equal(t, 7, comparison.TotalChecked())
 }
 
+func TestManifestComparisonMatchesDuplicateContentOneToOne(t *testing.T) {
+	// Two old paths and two new paths share the same checksum ("dup"); each
+	// old path should be matched to a distinct new path, not all-to-all.
+	oldManifest := &Manifest{
+		Entries: map[string]ChecksumRecord{
+			"old1": {Checksum: "dup"},
+			"old2": {Checksum: "dup"},
+		},
+	}
+	newManifest := &Manifest{
+		Entries: map[string]ChecksumRecord{
+			"new1": {Checksum: "dup"},
+			"new2": {Checksum: "dup"},
+		},
+	}
+
+	comparison := CompareManifests(oldManifest, newManifest)
+
+	assert.Empty(t, comparison.AddedPaths)
+	assert.Empty(t, comparison.DeletedPaths)
+	assert.Len(t, comparison.RenamedPaths, 2)
+
+	matchedOld := map[string]bool{}
+	matchedNew := map[string]bool{}
+	for _, renamed := range comparison.RenamedPaths {
+		matchedOld[renamed.OldPath] = true
+		matchedNew[renamed.NewPath] = true
+	}
+	assert.True(t, matchedOld["old1"])
+	assert.True(t, matchedOld["old2"])
+	assert.True(t, matchedNew["new1"])
+	assert.True(t, matchedNew["new2"])
+}
+
 func TestCaching(t *testing.T) {
 	oldManifest, newManifest := setupTestManifests()
 	comparison := &ManifestComparison{oldManifest: oldManifest, newManifest: newManifest, complete: true}

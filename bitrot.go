@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/jessevdk/go-flags"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 const (
 	name    = "bitrot"
-	version = "0.0.2"
+	version = "0.1.0"
 )
 
 // go-flags requires us to wrap positional args in a struct
@@ -19,38 +20,22 @@ type PathArguments struct {
 	Path flags.Filename `positional-arg-name:"PATH" description:"Path to directory."`
 }
 
-type ComparedPathArguments struct {
-	Old flags.Filename `positional-arg-name:"OLDPATH" description:"Path to old or original directory."`
-	New flags.Filename `positional-arg-name:"NEWPATH" description:"Path to new or copy directory."`
-}
+// Options/arguments for the `scan` command
+type Scan struct {
+	Exclude       []string      `short:"e" long:"exclude" description:"File/directory basename to exclude wherever it occurs in the tree, in addition to the built-in defaults (.DS_Store, .git, etc). Repeat option to exclude multiple names."`
+	ExcludePrefix []string      `short:"x" long:"exclude-prefix" description:"Path, relative to PATH, to exclude from the scan along with everything under it. Repeat option to exclude multiple paths."`
+	Workers       int           `short:"w" long:"workers" description:"Number of parallel hashing workers (defaults to number of CPUs)" default:"0"`
+	LogFile       string        `short:"l" long:"log-file" description:"Write the full, untruncated report to this file."`
+	Truncate      int           `short:"t" long:"truncate" description:"Maximum number of paths to print per section (0 = no truncation). Useful when piping the report somewhere size-constrained, like an email body." default:"0"`
+	Progress      bool          `short:"p" long:"progress" description:"Print a live progress status line to stderr while scanning. Off by default since it's noise if captured into a log/email."`
+	Arguments     PathArguments `required:"true" positional-args:"true"`
+	logger        *log.Logger
 
-// Options/arguments for the `generate` command
-type Generate struct {
-	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Pretty    bool          `short:"p" long:"pretty" description:"Make a \"pretty\" (indented) JSON file."`
-	Arguments PathArguments `required:"true" positional-args:"true"`
-	logger    *log.Logger
-}
-
-// Options/arguments for the `validate` command
-type Validate struct {
-	Exclude   []string      `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Arguments PathArguments `required:"true" positional-args:"true"`
-	logger    *log.Logger
-}
-
-// Options/arguments for the `compare` command
-type Compare struct {
-	Exclude   []string              `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Arguments ComparedPathArguments `required:"true" positional-args:"true"`
-	logger    *log.Logger
-}
-
-// Options/arguments for the `compare-latest-manifests` command
-type CompareLatestManifests struct {
-	Exclude   []string              `short:"e" long:"exclude" description:"File/directory names to exclude. Repeat option to exclude multiple names."`
-	Arguments ComparedPathArguments `required:"true" positional-args:"true"`
-	logger    *log.Logger
+	// WrittenManifestPath is the exact path of the manifest written by the
+	// most recent Execute call, exposed for callers (tests, mainly) that
+	// want it directly rather than re-deriving it from the log text or the
+	// filesystem.
+	WrittenManifestPath string
 }
 
 // Extracts string path from wrapper and converts it to an absolute path
@@ -62,10 +47,15 @@ func pathString(name flags.Filename) (string, error) {
 	return path, nil
 }
 
-func (cmd *Generate) Execute(args []string) (err error) {
+func (cmd *Scan) Execute(args []string) (err error) {
 	config := DefaultConfig()
 	if len(cmd.Exclude) > 0 {
-		config.ExcludedFiles = cmd.Exclude
+		// Additive to the built-in defaults, so passing --exclude doesn't
+		// silently stop ignoring .DS_Store etc.
+		config.ExcludedNames = append(config.ExcludedNames, cmd.Exclude...)
+	}
+	if len(cmd.ExcludePrefix) > 0 {
+		config.ExcludedPrefixes = cmd.ExcludePrefix
 	}
 	assertNoExtraArgs(&args, cmd.logger)
 	path, err := pathString(cmd.Arguments.Path)
@@ -74,172 +64,90 @@ func (cmd *Generate) Execute(args []string) (err error) {
 	}
 	manifestStorage := config.ManifestStorage()
 
-	cmd.logger.Printf("Generating manifest for %s...\n", path)
+	cmd.logger.Printf("Scanning %s...\n", path)
 
-	manifest, err := NewManifest(path, config)
+	var progressFn ProgressFunc
+	var progressPrinter *ProgressPrinter
+	if cmd.Progress {
+		progressPrinter = NewProgressPrinter(os.Stderr)
+		progressFn = progressPrinter.Update
+	}
+
+	manifest, errored, err := NewManifest(path, config, cmd.Workers, progressFn)
+	if progressPrinter != nil {
+		progressPrinter.Finish()
+	}
 	if err != nil {
 		return err
 	}
+	for _, fe := range errored {
+		cmd.logger.Printf("Error reading %s: %s\n", fe.Path, fe.Error)
+	}
+	if len(errored) > 0 {
+		cmd.logger.Printf("%d files could not be read.\n", len(errored))
+	}
 
-	// Potentially validate manifest against previous
 	latestManifest, err := manifestStorage.LatestManifestForPath(path)
 	if err != nil {
 		return err
 	}
+
+	var comparison *ManifestComparison
 	if latestManifest != nil {
 		ts := latestManifest.CreatedAt.Format(manifestNameTimeFormat)
 		cmd.logger.Printf("Comparing to previous manifest from %s\n", ts)
-		comparison := CompareManifests(latestManifest, manifest)
-		report := NewComparisonReport(comparison)
-		cmd.logger.Printf(report.ReportString())
+		comparison = CompareManifests(latestManifest, manifest)
 	}
 
 	// Write new manifest
-	err = manifestStorage.AddManifest(manifest)
+	manifestPath, err := manifestStorage.AddManifest(manifest)
 	if err != nil {
 		cmd.logger.Fatalf("Error saving manifest! %s\n", err)
 		return err
 	}
+	cmd.WrittenManifestPath = manifestPath
+	cmd.logger.Printf("Wrote manifest to %s\n", manifestPath)
 
-	cmd.logger.Printf("Wrote manifest in %s\n", manifestStorage.Path)
-
-	return nil
-}
-
-func (cmd *Validate) Execute(args []string) (err error) {
-	config := DefaultConfig()
-	if len(cmd.Exclude) > 0 {
-		config.ExcludedFiles = cmd.Exclude
-	}
-	assertNoExtraArgs(&args, cmd.logger)
-	path, err := pathString(cmd.Arguments.Path)
-	if err != nil {
-		return err
-	}
-	manifestStorage := config.ManifestStorage()
-
-	cmd.logger.Printf("Validating manifest for %s...\n", path)
-
-	currentManifest, err := NewManifest(path, config)
-	if err != nil {
-		return err
-	}
-
-	latestManifest, err := manifestStorage.LatestManifestForPath(path)
-	if err != nil {
-		return err
-	}
-
-	if latestManifest == nil {
-		cmd.logger.Printf("No previous manifest to validate for %s.", path)
-		return fmt.Errorf("")
-	}
-
-	comparison := CompareManifests(latestManifest, currentManifest)
-	report := NewComparisonReport(comparison)
-	cmd.logger.Printf(report.ReportString())
-
-	flagged := len(comparison.FlaggedPaths)
-	if flagged > 0 {
-		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
-		return fmt.Errorf("")
+	// fullReport/printedReport are computed - and, if --log-file is set,
+	// written - unconditionally, even on a first scan with nothing to
+	// compare yet. Previously --log-file only ran inside the "comparison
+	// exists" branch, so it silently did nothing on a path's first-ever
+	// scan.
+	var fullReport, printedReport string
+	if comparison != nil {
+		report := NewComparisonReport(comparison)
+		fullReport = report.ReportString()
+		printedReport = report.TruncatedReportString(cmd.Truncate)
 	} else {
-		cmd.logger.Printf("Validated manifest for %s.\n", path)
+		fullReport = fmt.Sprintf("No previous manifest to compare for %s.\n", path)
+		printedReport = fullReport
 	}
 
-	return nil
-}
-
-func (cmd *Compare) Execute(args []string) (err error) {
-	config := DefaultConfig()
-	if len(cmd.Exclude) > 0 {
-		config.ExcludedFiles = cmd.Exclude
-	}
-	assertNoExtraArgs(&args, cmd.logger)
-	oldPath, err := pathString(cmd.Arguments.Old)
-	if err != nil {
-		return err
+	if cmd.LogFile != "" {
+		if writeErr := ioutil.WriteFile(cmd.LogFile, []byte(fullReport), 0644); writeErr != nil {
+			cmd.logger.Printf("Error writing full report to %s: %s\n", cmd.LogFile, writeErr)
+		} else {
+			cmd.logger.Printf("Wrote full report to %s\n", cmd.LogFile)
+		}
 	}
 
-	newPath, err := pathString(cmd.Arguments.New)
-	if err != nil {
-		return err
-	}
+	cmd.logger.Printf(printedReport)
 
-	oldManifest, err := NewManifest(oldPath, config)
-	if err != nil {
-		return err
-	}
-
-	newManifest, err := NewManifest(newPath, config)
-	if err != nil {
-		return err
-	}
-
-	comparison := CompareManifests(oldManifest, newManifest)
-	report := NewComparisonReport(comparison)
-	cmd.logger.Printf(report.ReportString())
-
-	flagged := len(comparison.FlaggedPaths)
-	if flagged > 0 {
-		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
-		return fmt.Errorf("")
-	} else {
-		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
-	}
-
-	return nil
-}
-
-func (cmd *CompareLatestManifests) Execute(args []string) (err error) {
-	config := DefaultConfig()
-	if len(cmd.Exclude) > 0 {
-		config.ExcludedFiles = cmd.Exclude
-	}
-	assertNoExtraArgs(&args, cmd.logger)
-	manifestStorage := config.ManifestStorage()
-
-	oldPath, err := pathString(cmd.Arguments.Old)
-	if err != nil {
-		return err
-	}
-
-	newPath, err := pathString(cmd.Arguments.New)
-	if err != nil {
-		return err
-	}
-
-	oldManifest, err := manifestStorage.LatestManifestForPath(oldPath)
-	if err != nil {
-		return err
-	}
-
-	newManifest, err := manifestStorage.LatestManifestForPath(newPath)
-	if err != nil {
-		return err
-	}
-
-	if oldManifest == nil {
-		cmd.logger.Printf("No existing manifest for %s\n", oldPath)
-		return nil
-	}
-	if newManifest == nil {
-		cmd.logger.Printf("No existing manifest for %s\n", newPath)
+	if comparison == nil {
+		if len(errored) > 0 {
+			return fmt.Errorf("")
+		}
 		return nil
 	}
 
-	comparison := CompareManifests(oldManifest, newManifest)
-	report := NewComparisonReport(comparison)
-	cmd.logger.Printf(report.ReportString())
-
+	deleted := len(comparison.DeletedPaths)
 	flagged := len(comparison.FlaggedPaths)
-	if flagged > 0 {
-		cmd.logger.Printf("%d files flagged for possible corruption.", flagged)
+	if deleted > 0 || flagged > 0 || len(errored) > 0 {
+		cmd.logger.Printf("%d files deleted, %d files flagged for possible corruption, %d files could not be read.\n", deleted, flagged, len(errored))
 		return fmt.Errorf("")
-	} else {
-		cmd.logger.Printf("Successfully validated %s as a copy of %s.\n", newPath, oldPath)
 	}
 
+	cmd.logger.Printf("Scan validated for %s.\n", path)
 	return nil
 }
 
@@ -268,31 +176,10 @@ func main() {
 	parser := flags.NewParser(&AppOpts, flags.HelpFlag|flags.PassDoubleDash)
 	addCommand(
 		parser,
-		"generate",
-		"Generate manifest",
-		"Generate manifest for directory",
-		&Generate{logger: logger},
-	)
-	addCommand(
-		parser,
-		"validate",
-		"Validate manifest",
-		"Validate manifest for directory",
-		&Validate{logger: logger},
-	)
-	addCommand(
-		parser,
-		"compare",
-		"Compare manifests",
-		"Compare manifests for two directories",
-		&Compare{logger: logger},
-	)
-	addCommand(
-		parser,
-		"compare-latest-manifests",
-		"Compare latest manifests",
-		"Compare latest manifests for two directories",
-		&CompareLatestManifests{logger: logger},
+		"scan",
+		"Scan directory",
+		"Generate a manifest for a directory, compare it to the previous scan, and report additions/deletions/renames/modifications/flagged (possible corruption) files.",
+		&Scan{logger: logger},
 	)
 	_, err := parser.Parse()
 	if err != nil {
