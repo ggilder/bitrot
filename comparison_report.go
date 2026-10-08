@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // ComparisonReport handles summarizing and formatting the results of a manifest comparison.
@@ -56,12 +57,15 @@ func (report *ComparisonReport) DetailString() string {
 }
 
 func (report *ComparisonReport) detailString(maxPerSection int) string {
-	return report.unchangedSection() +
-		report.pathSection("Added", report.mc.AddedPaths, maxPerSection) +
-		report.pathSection("Deleted", report.mc.DeletedPaths, maxPerSection) +
-		report.renamedSection(maxPerSection) +
-		report.pathSection("Modified", report.mc.ModifiedPaths, maxPerSection) +
-		report.pathSection("Flagged", report.mc.FlaggedPaths, maxPerSection)
+	sections := []string{
+		report.unchangedSection(),
+		report.pathSection("Added", report.mc.AddedPaths, maxPerSection),
+		report.pathSection("Deleted", report.mc.DeletedPaths, maxPerSection),
+		report.renamedSection(maxPerSection),
+		report.pathSection("Modified", report.mc.ModifiedPaths, maxPerSection),
+		report.pathSection("Flagged", report.mc.FlaggedPaths, maxPerSection),
+	}
+	return strings.Join(sections, "\n")
 }
 
 func (report *ComparisonReport) summaryLine(description string, paths []string) string {
